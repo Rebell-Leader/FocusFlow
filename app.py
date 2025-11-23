@@ -239,12 +239,13 @@ def run_focus_check() -> tuple:
     # Trigger browser alert for distracted status
     alert_js = None
     if verdict == "Distracted":
-        safe_message = message.replace('"', "'").replace("\n", " ")
+        import json
+        safe_message = json.dumps(message)
         alert_js = f"""
         () => {{
             if (Notification.permission === "granted") {{
                 new Notification("FocusFlow Alert 🦉", {{
-                    body: "{safe_message}",
+                    body: {safe_message},
                     icon: "https://em-content.zobj.net/thumbs/160/apple/354/owl_1f989.png"
                 }});
             }}

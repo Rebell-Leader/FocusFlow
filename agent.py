@@ -200,7 +200,8 @@ Respond in JSON format:
 }}"""
         
         try:
-            if self.provider == "openai":
+            if self.provider in ["openai", "vllm"]:
+                # Both OpenAI and vLLM use the same API interface
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[{"role": "user", "content": prompt}],
