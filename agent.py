@@ -12,24 +12,32 @@ class FocusAgent:
     
     VERDICT_TYPES = Literal["On Track", "Distracted", "Idle"]
     
-    def __init__(self, provider: str = "openai", api_key: Optional[str] = None):
+    def __init__(self, provider: str = "openai", api_key: Optional[str] = None, 
+                 base_url: Optional[str] = None, model: Optional[str] = None):
         """Initialize the focus agent with AI provider."""
         self.provider = provider.lower()
-        self.api_key = api_key or os.getenv(f"{provider.upper()}_API_KEY")
         self.last_verdict: Optional[str] = None
         self.idle_count = 0
         self.distracted_count = 0
         
         if self.provider == "openai":
             from openai import OpenAI
+            self.api_key = api_key or os.getenv("OPENAI_API_KEY")
             self.client = OpenAI(api_key=self.api_key)
-            self.model = "gpt-4o"
+            self.model = model or "gpt-4o"
         elif self.provider == "anthropic":
             from anthropic import Anthropic
+            self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
             self.client = Anthropic(api_key=self.api_key)
-            self.model = "claude-3-5-sonnet-20241022"
+            self.model = model or "claude-3-5-sonnet-20241022"
+        elif self.provider == "vllm":
+            from openai import OpenAI
+            self.api_key = api_key or os.getenv("VLLM_API_KEY", "EMPTY")
+            self.base_url = base_url or os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1")
+            self.model = model or os.getenv("VLLM_MODEL", "ibm-granite/granite-4.0-h-1b")
+            self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
         else:
-            raise ValueError(f"Unsupported provider: {provider}")
+            raise ValueError(f"Unsupported provider: {provider}. Supported: openai, anthropic, vllm")
     
     def _create_analysis_prompt(self, active_task: Dict, recent_activity: List[Dict]) -> str:
         """Create the analysis prompt for the LLM."""
@@ -88,7 +96,8 @@ Respond in JSON format:
     def _call_llm(self, prompt: str) -> Dict:
         """Call the LLM and parse the response."""
         try:
-            if self.provider == "openai":
+            if self.provider in ["openai", "vllm"]:
+                # Both OpenAI and vLLM use the same API interface
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[{"role": "user", "content": prompt}],
