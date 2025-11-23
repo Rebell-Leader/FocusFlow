@@ -52,6 +52,10 @@ All settings are managed via environment variables (see `.env.example`):
 - 2025-11-23: Fixed Gradio 6.0 API compatibility issues
 - 2025-11-23: Fixed vLLM provider handling in onboarding and monitoring
 - 2025-11-23: Improved JavaScript notification security with proper escaping
+- 2025-11-23: Implemented vLLM as automatic fallback when API keys missing
+- 2025-11-23: Complete UI/UX redesign with landing page and cleaner navigation
+- 2025-11-23: Task Manager now supports inline editing and quick actions
+- 2025-11-23: Simplified Monitor Dashboard based on mode (demo/local)
 
 ## User Preferences
 - Dark theme for Gradio UI (access via URL parameter: ?__theme=dark)

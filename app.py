@@ -26,33 +26,46 @@ task_manager = TaskManager()
 file_monitor = FileMonitor()
 focus_agent: Optional[FocusAgent] = None
 monitoring_active = False
+timer_active = False  # Track timer state globally
 activity_log: List[str] = []
 demo_text_content = ""  # For demo mode text monitoring
 
 
 def initialize_agent() -> str:
-    """Initialize the AI agent from environment configuration."""
-    global focus_agent
+    """Initialize the AI agent with fallback to vLLM if API keys are missing."""
+    global focus_agent, AI_PROVIDER
+    
     try:
-        if AI_PROVIDER == "vllm":
+        provider_to_use = AI_PROVIDER
+        fallback_used = False
+        
+        if AI_PROVIDER == "anthropic":
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if not api_key:
+                provider_to_use = "vllm"
+                fallback_used = True
+            else:
+                focus_agent = FocusAgent(provider="anthropic", api_key=api_key)
+        elif AI_PROVIDER == "openai":
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                provider_to_use = "vllm"
+                fallback_used = True
+            else:
+                focus_agent = FocusAgent(provider="openai", api_key=api_key)
+        
+        if provider_to_use == "vllm":
             focus_agent = FocusAgent(
                 provider="vllm",
                 api_key=os.getenv("VLLM_API_KEY", "EMPTY"),
                 base_url=os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1"),
                 model=os.getenv("VLLM_MODEL", "ibm-granite/granite-4.0-h-1b")
             )
-        elif AI_PROVIDER == "anthropic":
-            api_key = os.getenv("ANTHROPIC_API_KEY")
-            if not api_key:
-                return "❌ ANTHROPIC_API_KEY not found in environment"
-            focus_agent = FocusAgent(provider="anthropic", api_key=api_key)
-        else:  # openai (default)
-            api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key:
-                return "❌ OPENAI_API_KEY not found in environment"
-            focus_agent = FocusAgent(provider="openai", api_key=api_key)
         
-        return f"✅ {AI_PROVIDER.upper()} agent initialized successfully!"
+        if fallback_used:
+            return f"⚠️ {AI_PROVIDER.upper()} API key not found. Using vLLM as fallback provider."
+        else:
+            return f"✅ {provider_to_use.upper()} agent initialized successfully!"
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
@@ -150,29 +163,33 @@ def mark_task_done(task_id: str) -> tuple:
 
 def start_monitoring(watch_path: str) -> tuple:
     """Start file monitoring (local mode only)."""
-    global monitoring_active
+    global monitoring_active, timer_active
     
     if LAUNCH_MODE == "demo":
         return "❌ File monitoring disabled in demo mode. Use the text area instead.", gr.update(active=False)
     
     if not watch_path or not os.path.exists(watch_path):
         monitoring_active = False
+        timer_active = False
         return f"❌ Invalid path: {watch_path}", gr.update(active=False)
     
     try:
         file_monitor.start(watch_path)
         monitoring_active = True
+        timer_active = True  # Sync timer state
         return f"✅ Monitoring started on: {watch_path}", gr.update(active=True)
     except Exception as e:
         monitoring_active = False
+        timer_active = False
         return f"❌ Error: {str(e)}", gr.update(active=False)
 
 
 def stop_monitoring() -> tuple:
     """Stop file monitoring."""
-    global monitoring_active
+    global monitoring_active, timer_active
     file_monitor.stop()
     monitoring_active = False
+    timer_active = False  # Sync timer state
     return "⏹️ Monitoring stopped", gr.update(active=False)
 
 
@@ -256,35 +273,67 @@ def run_focus_check() -> tuple:
     return "\n".join(activity_log), alert_js
 
 
+# New UI for FocusFlow - Complete Redesign
+# This will be integrated into app.py
+
 # Build the Gradio interface
-# Note: Gradio 6.0 has different API for themes. Users can access dark mode via URL: ?__theme=dark
+# Note: Gradio 6.0 - Users can access dark mode via URL: ?__theme=dark
 with gr.Blocks(title="FocusFlow AI") as app:
-    gr.Markdown(f"""
-    # 🦉 FocusFlow - Your AI Accountability Buddy
-    Keep focused on your coding tasks with Duolingo-style nudges!
     
-    **Mode:** {LAUNCH_MODE.upper()} | **AI Provider:** {AI_PROVIDER.upper()} | **Check Interval:** {MONITOR_INTERVAL}s
-    """)
+    # Hidden component for browser alerts
+    alert_trigger = gr.HTML(visible=False)
     
-    # Info banner about available modes
-    if LAUNCH_MODE == "demo":
-        gr.Markdown("""
-        ℹ️ **Demo Mode Active**: Use the text area to simulate your workspace. File monitoring is disabled.
-        """)
-    else:
-        gr.Markdown("""
-        ℹ️ **Local Mode Active**: Monitor your actual project directory. Demo text area is disabled.
-        """)
+    # Auto-refresh timer
+    timer = gr.Timer(value=MONITOR_INTERVAL, active=False)
     
-    # Initialize agent on startup
-    init_status = gr.Textbox(label="Agent Status", value="Initializing...", interactive=False)
-    
-    with gr.Tabs():
-        # Tab 1: Onboarding
+    with gr.Tabs() as tabs:
+        # Tab 1: Home/Landing Page
+        with gr.Tab("🏠 Home"):
+            gr.Markdown("""
+            # 🦉 FocusFlow - Your AI Accountability Buddy
+            
+            Keep focused on your coding tasks with Duolingo-style nudges!
+            """)
+            
+            # Status indicator
+            init_status = gr.Textbox(label="Status", value="Initializing...", interactive=False, scale=1)
+            
+            gr.Markdown("""
+            ## ✨ Features
+            
+            - **🎯 AI-Powered Project Planning**: Break down projects into actionable micro-tasks
+            - **📊 Progress Tracking**: Visual progress monitoring with completion percentages
+            - **👁️ Real-Time Monitoring**: Track your coding activity and stay focused
+            - **🦉 Duolingo-Style Nudges**: Encouraging, sassy, and gentle reminders
+            - **🔔 Browser Notifications**: Get alerted when you're distracted
+            - **🚀 Multi-Provider AI**: OpenAI, Anthropic, or local vLLM support
+            
+            ## ⚙️ Current Configuration
+            """)
+            
+            with gr.Row():
+                gr.Markdown(f"**Mode:** `{LAUNCH_MODE.upper()}`")
+                gr.Markdown(f"**AI Provider:** `{AI_PROVIDER.upper()}`")
+                gr.Markdown(f"**Check Interval:** `{MONITOR_INTERVAL}s`")
+            
+            if LAUNCH_MODE == "demo":
+                gr.Markdown("""
+                > ℹ️ **Demo Mode**: Use the text area in Monitor tab to simulate your workspace.
+                """)
+            else:
+                gr.Markdown("""
+                > ℹ️ **Local Mode**: Monitor your actual project directory.
+                """)
+            
+            gr.Markdown("""
+            ---
+            **Get Started:** Navigate to Onboarding → describe your project → manage tasks → start monitoring!
+            """)
+        
+        # Tab 2: Onboarding
         with gr.Tab("🚀 Onboarding"):
-            gr.Markdown(f"""
-            ### AI-Powered Project Planning
-            Current provider: **{AI_PROVIDER.upper()}**
+            gr.Markdown("""
+            ## AI-Powered Project Planning
             
             Describe your project and I'll break it down into actionable micro-tasks!
             """)
@@ -292,196 +341,305 @@ with gr.Blocks(title="FocusFlow AI") as app:
             project_input = gr.Textbox(
                 label="What are you building?",
                 placeholder="e.g., 'A Python web scraper that extracts product data from e-commerce sites'",
-                lines=4
+                lines=5
             )
-            generate_btn = gr.Button("Generate Tasks", variant="primary", size="lg")
+            generate_btn = gr.Button("✨ Generate Tasks", variant="primary", size="lg")
             onboard_status = gr.Textbox(label="Status", interactive=False)
         
-        # Tab 2: Task Manager
-        with gr.Tab("📋 Task Manager"):
-            gr.Markdown("### Your Tasks")
+        # Tab 3: Task Manager
+        with gr.Tab("📋 Tasks"):
+            gr.Markdown("## Your Tasks")
             
-            progress_bar = gr.Slider(label="Overall Progress (%)", value=0, minimum=0, maximum=100, interactive=False)
+            progress_bar = gr.Slider(
+                label="Overall Progress",
+                value=0,
+                minimum=0,
+                maximum=100,
+                interactive=False
+            )
             
-            refresh_btn = gr.Button("🔄 Refresh Tasks")
-            
+            # Editable task table
             task_table = gr.Dataframe(
                 headers=["ID", "Title", "Description", "Status", "Duration"],
                 value=get_task_dataframe(),
-                interactive=False,
+                interactive=True,
                 wrap=True
             )
             
-            gr.Markdown("### Task Actions")
             with gr.Row():
-                task_id_input = gr.Textbox(label="Task ID", placeholder="1")
-                action_dropdown = gr.Dropdown(
-                    choices=["Set Active", "Mark Done", "Delete"],
-                    value="Set Active",
-                    label="Action"
-                )
-                action_btn = gr.Button("Execute", variant="primary")
+                save_table_btn = gr.Button("💾 Save Table Edits", variant="primary", size="sm")
+                refresh_btn = gr.Button("🔄 Refresh", size="sm")
+                add_blank_btn = gr.Button("➕ Add New Task", variant="secondary", size="sm")
+            
+            # Quick actions row
+            gr.Markdown("### Quick Actions")
+            with gr.Row():
+                task_id_input = gr.Number(label="Task ID", value=1, minimum=1, precision=0)
+                with gr.Column():
+                    set_active_btn = gr.Button("▶️ Set Active", variant="secondary", size="sm")
+                    mark_done_btn = gr.Button("✅ Mark Done", variant="secondary", size="sm")
+                    delete_btn = gr.Button("🗑️ Delete", variant="stop", size="sm")
             
             action_status = gr.Textbox(label="Status", interactive=False)
-            
-            gr.Markdown("### Add New Task")
-            with gr.Row():
-                new_title = gr.Textbox(label="Title", placeholder="Task title")
-                new_desc = gr.Textbox(label="Description", placeholder="Task description")
-                new_duration = gr.Textbox(label="Duration", placeholder="30 min")
-            add_task_btn = gr.Button("Add Task", variant="secondary")
-            add_status = gr.Textbox(label="Status", interactive=False)
         
-        # Tab 3: Monitor Dashboard
-        with gr.Tab("👁️ Monitor Dashboard"):
-            gr.Markdown("### Focus Monitoring")
+        # Tab 4: Monitor
+        with gr.Tab("👁️ Monitor"):
+            gr.Markdown("## Focus Monitoring")
             
-            # Demo mode: Text area
+            # Initialize all variables to avoid unbound issues
+            demo_textarea = None
+            demo_update_btn = None
+            demo_status = None
+            watch_path_input = None
+            start_monitor_btn = None
+            stop_monitor_btn = None
+            monitor_status = None
+            
+            # Mode-specific UI
             if LAUNCH_MODE == "demo":
-                gr.Markdown("**Demo Workspace** - Edit the text below to simulate coding activity:")
+                gr.Markdown("**Demo Workspace** - Edit the text below to simulate coding:")
                 demo_textarea = gr.Textbox(
-                    label="Your Code/Text",
+                    label="Your Code",
                     placeholder="Type or paste your code here...",
-                    lines=10,
-                    value="# Welcome to FocusFlow Demo!\n# Start typing to simulate coding activity..."
+                    lines=8,
+                    value="# Welcome to FocusFlow!\n# Start coding..."
                 )
-                demo_update_btn = gr.Button("Update Workspace", variant="secondary")
+                demo_update_btn = gr.Button("💾 Save Changes", variant="secondary")
                 demo_status = gr.Textbox(label="Status", interactive=False)
-                
-                # Disable file monitoring UI
-                gr.Markdown("_File monitoring is disabled in demo mode_")
-                watch_path_input = gr.Textbox(
-                    label="Directory to Monitor",
-                    value="(Disabled in demo mode)",
-                    interactive=False
-                )
-                start_monitor_btn = gr.Button("▶️ Start Monitoring", variant="secondary", interactive=False)
-                stop_monitor_btn = gr.Button("⏹️ Stop Monitoring", variant="stop", interactive=False)
-            
-            # Local mode: File monitoring
             else:
-                # Disable demo text area
-                gr.Markdown("_Demo text area is disabled in local mode_")
-                demo_textarea = gr.Textbox(
-                    label="Demo Workspace (Disabled)",
-                    value="(Demo mode not active)",
-                    interactive=False,
-                    lines=3
-                )
-                
-                gr.Markdown("**File Monitoring** - Monitor your actual project directory:")
+                gr.Markdown("**Directory Monitoring**")
                 watch_path_input = gr.Textbox(
-                    label="Directory to Monitor",
-                    placeholder="/path/to/your/project",
-                    value=os.getcwd()
+                    label="Path to Monitor",
+                    value=os.getcwd(),
+                    placeholder="/path/to/your/project"
                 )
-                
                 with gr.Row():
-                    start_monitor_btn = gr.Button("▶️ Start Monitoring", variant="primary")
-                    stop_monitor_btn = gr.Button("⏹️ Stop Monitoring", variant="stop")
+                    start_monitor_btn = gr.Button("▶️ Start", variant="primary", size="sm")
+                    stop_monitor_btn = gr.Button("⏹️ Stop", variant="stop", size="sm")
+                monitor_status = gr.Textbox(label="Status", interactive=False)
             
-            monitor_status = gr.Textbox(label="Monitor Status", interactive=False)
-            
-            gr.Markdown("### Live Activity Feed")
-            activity_display = gr.Textbox(
-                label="Recent Activity",
-                lines=6,
-                interactive=False
-            )
-            
-            gr.Markdown("### Focus Analysis")
+            # Focus log (common for both modes)
+            gr.Markdown("### 🦉 Focus Agent Log")
             focus_log = gr.Textbox(
-                label="AI Focus Agent Log",
-                lines=10,
-                interactive=False
+                label="Activity Log",
+                lines=12,
+                interactive=False,
+                placeholder="Focus checks will appear here..."
             )
             
-            # Hidden component for browser alerts
-            alert_trigger = gr.HTML(visible=False)
-            
-            manual_check_btn = gr.Button("🔍 Run Focus Check Now", variant="primary")
-            
-            # Auto-refresh timer
-            timer = gr.Timer(value=MONITOR_INTERVAL, active=False)
+            with gr.Row():
+                manual_check_btn = gr.Button("🔍 Run Focus Check Now", variant="secondary")
+                if LAUNCH_MODE == "demo":
+                    timer_toggle_btn = gr.Button("⏸️ Pause Auto-Check", variant="secondary")
+                else:
+                    timer_toggle_btn = gr.Button("▶️ Start Auto-Check", variant="secondary")
     
     # Event handlers
     app.load(fn=initialize_agent, outputs=init_status)
     
+    # Onboarding handlers
     generate_btn.click(
         fn=process_onboarding,
         inputs=project_input,
         outputs=[onboard_status, task_table, progress_bar]
     )
     
+    # Task manager handlers
     refresh_btn.click(
         fn=lambda: (get_task_dataframe(), calculate_progress()),
         outputs=[task_table, progress_bar]
     )
     
-    def execute_task_action(task_id: str, action: str):
-        if action == "Set Active":
-            return set_task_active(task_id)
-        elif action == "Mark Done":
-            return mark_task_done(task_id)
-        elif action == "Delete":
-            return delete_task(task_id)
-        return "Unknown action", get_task_dataframe(), calculate_progress()
+    def add_blank_task():
+        """Add a blank task row for inline editing."""
+        task_manager.add_task(
+            title="New Task",
+            description="Edit this description",
+            estimated_duration="30 min"
+        )
+        return get_task_dataframe(), calculate_progress()
     
-    action_btn.click(
-        fn=execute_task_action,
-        inputs=[task_id_input, action_dropdown],
+    add_blank_btn.click(
+        fn=add_blank_task,
+        outputs=[task_table, progress_bar]
+    )
+    
+    def save_table_edits(table_data):
+        """Save inline edits from the task table."""
+        try:
+            if not table_data:
+                return "❌ No data to save", get_task_dataframe(), calculate_progress()
+            
+            # Valid status values
+            VALID_STATUSES = {"Done", "In Progress", "Not Started"}
+            
+            updated_count = 0
+            for row in table_data:
+                if len(row) >= 5:
+                    task_id = int(row[0])
+                    title = str(row[1])
+                    description = str(row[2])
+                    status_raw = str(row[3]).strip()
+                    duration = str(row[4])
+                    
+                    # Normalize status: remove emoji prefix and trim
+                    # Split on first space and take the rest
+                    parts = status_raw.split(' ', 1)
+                    status_cleaned = (parts[1] if len(parts) > 1 else parts[0]).strip()
+                    
+                    # Validate against allowed statuses
+                    if status_cleaned not in VALID_STATUSES:
+                        # Try case-insensitive match
+                        status_match = None
+                        for valid_status in VALID_STATUSES:
+                            if status_cleaned.lower() == valid_status.lower():
+                                status_match = valid_status
+                                break
+                        
+                        if not status_match:
+                            continue  # Skip invalid status rows
+                        status = status_match
+                    else:
+                        status = status_cleaned
+                    
+                    # Update task
+                    task_manager.update_task(
+                        task_id,
+                        title=title,
+                        description=description,
+                        status=status,
+                        estimated_duration=duration
+                    )
+                    updated_count += 1
+            
+            return f"✅ Saved {updated_count} task(s)!", get_task_dataframe(), calculate_progress()
+        except Exception as e:
+            return f"❌ Error saving: {str(e)}", get_task_dataframe(), calculate_progress()
+    
+    save_table_btn.click(
+        fn=save_table_edits,
+        inputs=task_table,
         outputs=[action_status, task_table, progress_bar]
     )
     
-    add_task_btn.click(
-        fn=add_new_task,
-        inputs=[new_title, new_desc, new_duration],
-        outputs=[add_status, task_table, progress_bar]
+    def quick_set_active(task_id):
+        try:
+            task_manager.set_active_task(int(task_id))
+            return "✅ Task set as active!", get_task_dataframe(), calculate_progress()
+        except Exception as e:
+            return f"❌ Error: {str(e)}", get_task_dataframe(), calculate_progress()
+    
+    def quick_mark_done(task_id):
+        try:
+            task_manager.update_task(int(task_id), status="Done")
+            return "✅ Task completed! 🎉", get_task_dataframe(), calculate_progress()
+        except Exception as e:
+            return f"❌ Error: {str(e)}", get_task_dataframe(), calculate_progress()
+    
+    def quick_delete(task_id):
+        try:
+            task_manager.delete_task(int(task_id))
+            return "✅ Task deleted", get_task_dataframe(), calculate_progress()
+        except Exception as e:
+            return f"❌ Error: {str(e)}", get_task_dataframe(), calculate_progress()
+    
+    set_active_btn.click(
+        fn=quick_set_active,
+        inputs=task_id_input,
+        outputs=[action_status, task_table, progress_bar]
     )
     
-    # Demo mode event handlers
-    if LAUNCH_MODE == "demo":
-        demo_update_btn.click(
-            fn=update_demo_text,
-            inputs=demo_textarea,
-            outputs=demo_status
-        )
-        # Auto-activate timer in demo mode
-        app.load(fn=lambda: gr.update(active=True), outputs=timer)
+    mark_done_btn.click(
+        fn=quick_mark_done,
+        inputs=task_id_input,
+        outputs=[action_status, task_table, progress_bar]
+    )
     
-    # Local mode event handlers
+    delete_btn.click(
+        fn=quick_delete,
+        inputs=task_id_input,
+        outputs=[action_status, task_table, progress_bar]
+    )
+    
+    # Monitor handlers
+    if LAUNCH_MODE == "demo":
+        if demo_update_btn and demo_textarea and demo_status:
+            demo_update_btn.click(
+                fn=update_demo_text,
+                inputs=demo_textarea,
+                outputs=demo_status
+            )
     else:
-        start_monitor_btn.click(
-            fn=start_monitoring,
-            inputs=watch_path_input,
-            outputs=[monitor_status, timer]
-        )
+        # Local mode monitoring with button label sync
+        def start_monitoring_wrapper(watch_path):
+            status, timer_update = start_monitoring(watch_path)
+            # Only show "Pause" if timer actually started
+            button_label = "⏸️ Pause Auto-Check" if timer_active else "▶️ Start Auto-Check"
+            return status, timer_update, gr.update(value=button_label)
         
-        stop_monitor_btn.click(
-            fn=stop_monitoring,
-            outputs=[monitor_status, timer]
-        )
+        def stop_monitoring_wrapper():
+            status, timer_update = stop_monitoring()
+            # Show "Start" when stopped
+            button_label = "▶️ Start Auto-Check"
+            return status, timer_update, gr.update(value=button_label)
+        
+        if start_monitor_btn and watch_path_input and monitor_status:
+            start_monitor_btn.click(
+                fn=start_monitoring_wrapper,
+                inputs=watch_path_input,
+                outputs=[monitor_status, timer, timer_toggle_btn]
+            )
+        
+        if stop_monitor_btn and monitor_status:
+            stop_monitor_btn.click(
+                fn=stop_monitoring_wrapper,
+                outputs=[monitor_status, timer, timer_toggle_btn]
+            )
     
     manual_check_btn.click(
         fn=run_focus_check,
         outputs=[focus_log, alert_trigger]
     )
     
-    def update_all_on_tick():
-        """Update both focus log and activity display on timer tick."""
-        focus_result, alert_js = run_focus_check()
-        activity_result = get_activity_summary()
+    # Timer toggle handler
+    def toggle_timer():
+        """Toggle the auto-check timer on/off."""
+        global timer_active
+        timer_active = not timer_active
         
-        # Return alert HTML if needed
+        if timer_active:
+            return gr.update(active=True), gr.update(value="⏸️ Pause Auto-Check")
+        else:
+            return gr.update(active=False), gr.update(value="▶️ Resume Auto-Check")
+    
+    timer_toggle_btn.click(
+        fn=toggle_timer,
+        outputs=[timer, timer_toggle_btn]
+    )
+    
+    # Set timer active in demo mode on load
+    if LAUNCH_MODE == "demo":
+        def activate_timer_demo():
+            global timer_active
+            timer_active = True
+            return gr.update(active=True)
+        
+        app.load(fn=activate_timer_demo, outputs=timer)
+    
+    # Timer tick handler
+    def update_on_tick():
+        """Update focus log on timer tick."""
+        focus_result, alert_js = run_focus_check()
+        
         alert_html = ""
         if alert_js:
             alert_html = f'<script>{alert_js}</script>'
         
-        return focus_result, activity_result, alert_html
+        return focus_result, alert_html
     
     timer.tick(
-        fn=update_all_on_tick,
-        outputs=[focus_log, activity_display, alert_trigger]
+        fn=update_on_tick,
+        outputs=[focus_log, alert_trigger]
     )
 
 
