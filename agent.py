@@ -19,23 +19,37 @@ class FocusAgent:
         self.last_verdict: Optional[str] = None
         self.idle_count = 0
         self.distracted_count = 0
+        self.connection_healthy = False
         
         if self.provider == "openai":
             from openai import OpenAI
             self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-            self.client = OpenAI(api_key=self.api_key)
+            self.client = OpenAI(api_key=self.api_key) if self.api_key else None
             self.model = model or "gpt-4o"
+            self.connection_healthy = bool(self.api_key)
         elif self.provider == "anthropic":
             from anthropic import Anthropic
             self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
-            self.client = Anthropic(api_key=self.api_key)
+            self.client = Anthropic(api_key=self.api_key) if self.api_key else None
             self.model = model or "claude-3-5-sonnet-20241022"
+            self.connection_healthy = bool(self.api_key)
         elif self.provider == "vllm":
             from openai import OpenAI
+            import httpx
             self.api_key = api_key or os.getenv("VLLM_API_KEY", "EMPTY")
             self.base_url = base_url or os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1")
             self.model = model or os.getenv("VLLM_MODEL", "ibm-granite/granite-4.0-h-1b")
-            self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+            
+            try:
+                timeout = httpx.Timeout(5.0, connect=2.0)
+                self.client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=timeout)
+                test_response = self.client.models.list()
+                self.connection_healthy = True
+            except Exception as e:
+                print(f"⚠️ vLLM connection failed: {e}")
+                print(f"   Make sure vLLM server is running at {self.base_url}")
+                self.client = None
+                self.connection_healthy = False
         else:
             raise ValueError(f"Unsupported provider: {provider}. Supported: openai, anthropic, vllm")
     
@@ -148,11 +162,16 @@ Respond in JSON format:
                 "timestamp": datetime.now().isoformat()
             }
         
-        if not self.api_key:
+        if not self.connection_healthy or not self.client:
+            provider_name = self.provider.upper()
+            if self.provider == "vllm":
+                msg = f"⚠️ vLLM server not reachable. Make sure it's running at {self.base_url}"
+            else:
+                msg = f"⚠️ {provider_name} API key not configured. Add your API key to enable AI monitoring."
             return {
                 "verdict": "On Track",
-                "message": "⚠️ API key not configured. Add your OpenAI or Claude API key in Settings.",
-                "reasoning": "No API key",
+                "message": msg,
+                "reasoning": "No connection",
                 "timestamp": datetime.now().isoformat()
             }
         
@@ -179,7 +198,7 @@ Respond in JSON format:
     
     def get_onboarding_tasks(self, project_description: str) -> List[Dict]:
         """Generate micro-tasks from project description."""
-        if not self.api_key:
+        if not self.connection_healthy or not self.client:
             return []
         
         prompt = f"""You are FocusFlow, an AI project planner.

@@ -11,6 +11,9 @@ import os
 class TaskManager:
     """Manages tasks with SQLite persistence."""
     
+    # Strict status enum
+    VALID_STATUSES = {"Todo", "In Progress", "Done"}
+    
     def __init__(self, db_path: str = "focusflow.db"):
         """Initialize the task manager with SQLite database."""
         self.db_path = db_path
@@ -38,6 +41,10 @@ class TaskManager:
     def add_task(self, title: str, description: str = "", 
                  estimated_duration: str = "", status: str = "Todo") -> int:
         """Add a new task and return its ID."""
+        # Validate status
+        if status not in self.VALID_STATUSES:
+            status = "Todo"
+        
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -87,7 +94,11 @@ class TaskManager:
         return dict(row) if row else None
     
     def update_task(self, task_id: int, **kwargs):
-        """Update a task's fields."""
+        """Update a task's fields with validation."""
+        # Validate status if provided
+        if 'status' in kwargs and kwargs['status'] not in self.VALID_STATUSES:
+            raise ValueError(f"Invalid status. Must be one of: {', '.join(self.VALID_STATUSES)}")
+        
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -143,25 +154,40 @@ class TaskManager:
         conn.close()
         return dict(row) if row else None
     
-    def set_active_task(self, task_id: int):
-        """Set a task as 'In Progress' and mark others as 'Todo' or 'Done'."""
+    def set_active_task(self, task_id: int) -> bool:
+        """Set a task as 'In Progress' and ensure only one task has this status.
+        Returns True if successful, False otherwise."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # First, set all 'In Progress' tasks back to 'Todo' (except done ones)
+        # Check if task exists and is not already Done
+        cursor.execute("SELECT status FROM tasks WHERE id = ?", (task_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            conn.close()
+            return False
+        
+        current_status = result[0]
+        if current_status == "Done":
+            conn.close()
+            return False
+        
+        # Enforce single "In Progress" rule: set all current "In Progress" tasks back to "Todo"
         cursor.execute("""
-            UPDATE tasks SET status = 'Todo' 
+            UPDATE tasks SET status = 'Todo', updated_at = CURRENT_TIMESTAMP
             WHERE status = 'In Progress'
         """)
         
         # Set the selected task as 'In Progress'
         cursor.execute("""
-            UPDATE tasks SET status = 'In Progress' 
+            UPDATE tasks SET status = 'In Progress', updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         """, (task_id,))
         
         conn.commit()
         conn.close()
+        return True
     
     def clear_all_tasks(self):
         """Clear all tasks from the database."""
