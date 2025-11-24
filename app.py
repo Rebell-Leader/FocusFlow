@@ -365,24 +365,11 @@ with gr.Blocks(title="FocusFlow AI") as app:
                 interactive=False
             )
             
-            # Tasks list container with individual task rows
-            tasks_container = gr.HTML(value="<div id='tasks-list'></div>")
+            # State to hold selected task ID
+            selected_task_id = gr.State(value=None)
             
-            # Add new task form (Confluence-style)
-            gr.Markdown("---")
-            with gr.Row():
-                new_task_title = gr.Textbox(label="", placeholder="Task title", scale=3)
-                new_task_desc = gr.Textbox(label="", placeholder="Description", scale=4)
-                new_task_duration = gr.Number(label="", value=30, minimum=5, maximum=480, step=5, scale=1, info="minutes")
-                new_task_status = gr.Dropdown(
-                    label="", 
-                    choices=["Todo", "In Progress", "Done"],
-                    value="Todo",
-                    scale=2
-                )
-                add_task_btn = gr.Button("➕", variant="primary", scale=1)
-            
-            # Table view for easier management
+            # Table view - click on row to select
+            gr.Markdown("**Click on a task row to select it for editing**")
             task_table = gr.Dataframe(
                 headers=["ID", "Title", "Description", "Status", "Duration (min)"],
                 value=[],
@@ -390,16 +377,50 @@ with gr.Blocks(title="FocusFlow AI") as app:
                 wrap=True
             )
             
+            # Compact action buttons for selected task
             with gr.Row():
-                refresh_btn = gr.Button("🔄 Refresh Table", size="sm")
+                with gr.Group():
+                    gr.Markdown("**Actions for Selected Task:**")
+                    with gr.Row():
+                        start_task_btn = gr.Button("▶️ Start", size="sm", variant="secondary", scale=1)
+                        mark_done_btn = gr.Button("✅ Done", size="sm", variant="secondary", scale=1)
+                        delete_task_btn = gr.Button("🗑️ Delete", size="sm", variant="stop", scale=1)
+            
+            selection_info = gr.Markdown("_No task selected. Click on a row above._")
+            
+            # Two-panel forms: Add New vs Edit Selected
+            gr.Markdown("---")
+            
+            with gr.Row(equal_height=True):
+                # Left: Add New Task
+                with gr.Column(scale=1):
+                    gr.Markdown("### ➕ Add New Task")
+                    add_title = gr.Textbox(label="Title", placeholder="Task title")
+                    add_desc = gr.Textbox(label="Description", placeholder="Describe the task", lines=2)
+                    with gr.Row():
+                        add_duration = gr.Number(label="Duration (minutes)", value=30, minimum=5, maximum=480, step=5, scale=2)
+                        add_status = gr.Dropdown(
+                            label="Status", 
+                            choices=["Todo", "In Progress", "Done"],
+                            value="Todo",
+                            scale=1
+                        )
+                    add_btn = gr.Button("➕ Add Task", variant="primary", size="sm")
                 
-            # Quick actions for selected task
-            gr.Markdown("### Quick Actions")
-            with gr.Row():
-                task_id_input = gr.Number(label="Task ID", value=1, minimum=1, precision=0, scale=1)
-                set_active_btn = gr.Button("▶️ Start Task", variant="secondary", scale=1)
-                mark_done_btn = gr.Button("✅ Mark Done", variant="secondary", scale=1)
-                delete_btn = gr.Button("🗑️ Delete", variant="stop", scale=1)
+                # Right: Edit Selected Task
+                with gr.Column(scale=1):
+                    gr.Markdown("### ✏️ Edit Selected Task")
+                    edit_title = gr.Textbox(label="Title", placeholder="Select a task first", interactive=True)
+                    edit_desc = gr.Textbox(label="Description", placeholder="Select a task first", lines=2, interactive=True)
+                    with gr.Row():
+                        edit_duration = gr.Number(label="Duration (minutes)", value=30, minimum=5, maximum=480, step=5, scale=2)
+                        edit_status = gr.Dropdown(
+                            label="Status", 
+                            choices=["Todo", "In Progress", "Done"],
+                            value="Todo",
+                            scale=1
+                        )
+                    save_btn = gr.Button("💾 Save Changes", variant="primary", size="sm")
         
         # Tab 4: Monitor
         with gr.Tab("👁️ Monitor"):
@@ -559,58 +580,254 @@ with gr.Blocks(title="FocusFlow AI") as app:
     )
     
     # Task manager handlers
-    refresh_btn.click(
-        fn=lambda: (get_task_dataframe(), calculate_progress()),
-        outputs=[task_table, progress_bar]
+    
+    # Row click handler - populate edit form with selected task
+    def on_task_select(evt: gr.SelectData, current_id):
+        """Handle row click to select a task for editing."""
+        if evt.index is None or len(evt.index) == 0:
+            return (
+                None,
+                "",
+                "",
+                30,
+                "Todo",
+                "_No task selected. Click on a row above._"
+            )
+        
+        row_index = evt.index[0]
+        tasks = task_manager.get_all_tasks()
+        
+        if row_index >= len(tasks):
+            return (
+                None,
+                "",
+                "",
+                30,
+                "Todo",
+                "_Invalid selection._"
+            )
+        
+        task = tasks[row_index]
+        task_id = task['id']
+        
+        # Parse duration back to number - handle both "30 min" and "30" formats
+        duration_str = task.get('estimated_duration', '30 min')
+        try:
+            # Remove " min" if present and convert to int
+            duration_num = int(duration_str.replace(' min', '').strip())
+        except (ValueError, AttributeError):
+            duration_num = 30  # Default fallback
+        
+        return (
+            task_id,
+            task['title'],
+            task['description'],
+            duration_num,
+            task['status'],
+            f"**Selected:** Task #{task_id} - {task['title']}"
+        )
+    
+    task_table.select(
+        fn=on_task_select,
+        inputs=[selected_task_id],
+        outputs=[selected_task_id, edit_title, edit_desc, edit_duration, edit_status, selection_info]
     )
     
     # Add new task handler
-    add_task_btn.click(
-        fn=add_new_task,
-        inputs=[new_task_title, new_task_desc, new_task_duration, new_task_status],
-        outputs=[new_task_title, new_task_desc, new_task_duration, new_task_status, task_table, progress_bar]
+    def add_task_handler(title, desc, duration, status):
+        """Add a new task."""
+        if not title.strip():
+            return "", "", 30, "Todo", get_task_dataframe(), calculate_progress()
+        
+        # Format duration as "n min" for storage
+        duration_str = f"{int(duration)} min" if duration else "30 min"
+        
+        task_manager.add_task(
+            title=title,
+            description=desc,
+            estimated_duration=duration_str,
+            status=status
+        )
+        
+        # Clear form and refresh
+        return "", "", 30, "Todo", get_task_dataframe(), calculate_progress()
+    
+    add_btn.click(
+        fn=add_task_handler,
+        inputs=[add_title, add_desc, add_duration, add_status],
+        outputs=[add_title, add_desc, add_duration, add_status, task_table, progress_bar]
     )
     
-    def quick_set_active(task_id):
+    # Save edited task handler
+    def save_task_handler(task_id, title, desc, duration, status):
+        """Save changes to the selected task."""
+        if task_id is None:
+            return get_task_dataframe(), calculate_progress(), "_No task selected._"
+        
+        try:
+            # Format duration as "n min" for storage
+            duration_str = f"{int(duration)} min" if duration else "30 min"
+            
+            task_manager.update_task(
+                task_id=int(task_id),
+                title=title,
+                description=desc,
+                estimated_duration=duration_str,
+                status=status
+            )
+            return get_task_dataframe(), calculate_progress(), f"✅ Task #{task_id} updated successfully!"
+        except Exception as e:
+            return get_task_dataframe(), calculate_progress(), f"❌ Error: {str(e)}"
+    
+    save_btn.click(
+        fn=save_task_handler,
+        inputs=[selected_task_id, edit_title, edit_desc, edit_duration, edit_status],
+        outputs=[task_table, progress_bar, selection_info]
+    )
+    
+    # Action button handlers for selected task
+    def start_selected_task(task_id, title, desc, duration, status):
+        """Set selected task as active/in progress."""
+        if task_id is None:
+            return (
+                get_task_dataframe(),
+                calculate_progress(),
+                "_No task selected. Click on a row first._",
+                None,
+                title,
+                desc,
+                duration,
+                status
+            )
+        
         try:
             success = task_manager.set_active_task(int(task_id))
             if success:
-                return get_task_dataframe(), calculate_progress()
+                return (
+                    get_task_dataframe(),
+                    calculate_progress(),
+                    f"▶️ Task #{task_id} set to In Progress!",
+                    task_id,
+                    title,
+                    desc,
+                    duration,
+                    "In Progress"
+                )
             else:
-                return get_task_dataframe(), calculate_progress()
+                return (
+                    get_task_dataframe(),
+                    calculate_progress(),
+                    f"⚠️ Could not start task (another task may already be in progress)",
+                    task_id,
+                    title,
+                    desc,
+                    duration,
+                    status
+                )
         except Exception as e:
-            return get_task_dataframe(), calculate_progress()
+            return (
+                get_task_dataframe(),
+                calculate_progress(),
+                f"❌ Error: {str(e)}",
+                task_id,
+                title,
+                desc,
+                duration,
+                status
+            )
     
-    def quick_mark_done(task_id):
+    def mark_selected_done(task_id, title, desc, duration, status):
+        """Mark selected task as done."""
+        if task_id is None:
+            return (
+                get_task_dataframe(),
+                calculate_progress(),
+                "_No task selected. Click on a row first._",
+                None,
+                title,
+                desc,
+                duration,
+                status
+            )
+        
         try:
             task_manager.update_task(int(task_id), status="Done")
-            return get_task_dataframe(), calculate_progress()
+            return (
+                get_task_dataframe(),
+                calculate_progress(),
+                f"✅ Task #{task_id} marked as Done!",
+                task_id,
+                title,
+                desc,
+                duration,
+                "Done"
+            )
         except Exception as e:
-            return get_task_dataframe(), calculate_progress()
+            return (
+                get_task_dataframe(),
+                calculate_progress(),
+                f"❌ Error: {str(e)}",
+                task_id,
+                title,
+                desc,
+                duration,
+                status
+            )
     
-    def quick_delete(task_id):
+    def delete_selected_task(task_id, title, desc, duration, status):
+        """Delete the selected task."""
+        if task_id is None:
+            return (
+                get_task_dataframe(),
+                calculate_progress(),
+                "_No task selected. Click on a row first._",
+                None,
+                "",
+                "",
+                30,
+                "Todo"
+            )
+        
         try:
             task_manager.delete_task(int(task_id))
-            return get_task_dataframe(), calculate_progress()
+            return (
+                get_task_dataframe(), 
+                calculate_progress(), 
+                f"🗑️ Task #{task_id} deleted.",
+                None,
+                "",
+                "",
+                30,
+                "Todo"
+            )
         except Exception as e:
-            return get_task_dataframe(), calculate_progress()
+            return (
+                get_task_dataframe(),
+                calculate_progress(),
+                f"❌ Error: {str(e)}",
+                task_id,
+                title,
+                desc,
+                duration,
+                status
+            )
     
-    set_active_btn.click(
-        fn=quick_set_active,
-        inputs=task_id_input,
-        outputs=[task_table, progress_bar]
+    start_task_btn.click(
+        fn=start_selected_task,
+        inputs=[selected_task_id, edit_title, edit_desc, edit_duration, edit_status],
+        outputs=[task_table, progress_bar, selection_info, selected_task_id, edit_title, edit_desc, edit_duration, edit_status]
     )
     
     mark_done_btn.click(
-        fn=quick_mark_done,
-        inputs=task_id_input,
-        outputs=[task_table, progress_bar]
+        fn=mark_selected_done,
+        inputs=[selected_task_id, edit_title, edit_desc, edit_duration, edit_status],
+        outputs=[task_table, progress_bar, selection_info, selected_task_id, edit_title, edit_desc, edit_duration, edit_status]
     )
     
-    delete_btn.click(
-        fn=quick_delete,
-        inputs=task_id_input,
-        outputs=[task_table, progress_bar]
+    delete_task_btn.click(
+        fn=delete_selected_task,
+        inputs=[selected_task_id, edit_title, edit_desc, edit_duration, edit_status],
+        outputs=[task_table, progress_bar, selection_info, selected_task_id, edit_title, edit_desc, edit_duration, edit_status]
     )
     
     # Monitor handlers

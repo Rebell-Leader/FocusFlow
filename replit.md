@@ -42,26 +42,34 @@ All settings are managed via environment variables (see `.env.example`):
 - API keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or vLLM endpoint settings
 
 ## Recent Changes
-- 2025-11-24: Fixed vLLM connection health check with timeout and graceful error messages
-- 2025-11-24: Enforced strict status enum (Todo, In Progress, Done) in storage layer
-- 2025-11-24: Implemented "only one task in progress" business rule with transactional enforcement
-- 2025-11-24: Removed Status textboxes from Onboarding and Tasks pages (only on Monitor)
-- 2025-11-24: Complete Tasks page redesign:
-  - Confluence-style inline add task form with dropdown status and duration input
-  - Simplified table view (read-only) for easy viewing
-  - Quick actions (Start Task, Mark Done, Delete) via Task ID
-  - Duration as number input (minutes) instead of text
-- 2025-11-24: Added Pomodoro timer (25+5) to Monitor page:
+- 2025-11-24: **Row-Click Task Editing** - Click any table row to select and edit tasks:
+  - Dual-panel design: "Add New Task" (left) vs "Edit Selected Task" (right)
+  - Proper field labels: Title, Description, Duration (minutes), Status
+  - Compact action buttons: Start, Done, Delete (no Task ID input needed)
+  - Safe duration parsing: handles "30 min", "30 minutes", or "30" formats
+  - Handler signature fixes: all action buttons return 8 values matching Gradio bindings
+  - Selection feedback: "**Selected:** Task #X - Title" displayed
+- 2025-11-24: **Pomodoro Timer (25+5)** on Monitor page:
   - Visual countdown display with gradient background
-  - Work/Break mode switching
+  - Work/Break mode auto-switching
   - Start/Pause/Reset controls
   - Browser notifications and audio alerts on completion
-- 2025-11-24: Implemented audio alerts:
+- 2025-11-24: **Audio Alerts**:
   - Pomodoro timer completion sound + notification
   - AI nudge alert sound for Distracted/Idle status
   - HTML5 audio elements with base64 encoded sounds
+- 2025-11-24: **vLLM Connection Management**:
+  - Health check with timeout at initialization
+  - Clear error messages when server unavailable
+  - Graceful degradation in AI features
+- 2025-11-24: **Strict Data Model Enforcement**:
+  - Status enum: Todo, In Progress, Done (validated in storage layer)
+  - Single "In Progress" task rule (enforced transactionally)
+  - Duration stored as "{n} min" string, displayed as number input
+- 2025-11-24: **UI Cleanup**:
+  - Removed Status blocks from Onboarding and Tasks pages
+  - Status feedback only on Monitor page
 - 2025-11-23: Complete UI/UX redesign with landing page and cleaner navigation
-- 2025-11-23: Task Manager now supports inline editing and quick actions
 - 2025-11-23: Implemented vLLM as automatic fallback when API keys missing
 
 ## User Preferences
