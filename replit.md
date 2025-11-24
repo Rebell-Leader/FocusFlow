@@ -42,13 +42,23 @@ All settings are managed via environment variables (see `.env.example`):
 - API keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or vLLM endpoint settings
 
 ## Recent Changes
-- 2025-11-24: **Row-Click Task Editing** - Click any table row to select and edit tasks:
-  - Dual-panel design: "Add New Task" (left) vs "Edit Selected Task" (right)
+- 2025-11-24: **Clean Single-Form UI** - Collapsed duplicate add/edit forms into dynamic single form:
+  - Single hidden form shown on-demand ("+ Add Task" button or click table row)
+  - Dynamic header changes based on mode ("Add New Task" vs "Edit Task #X")
+  - Form modes: hidden, add, edit (tracked via form_mode State)
+  - Save button intelligently adds or updates based on current mode
+  - Cancel button hides form and clears selection
+  - Saves significant screen space vs old duplicate-form design
+- 2025-11-24: **Compact Action Buttons** - Merged with progress bar at top:
+  - Progress bar + Quick Actions in single horizontal Row
+  - Three compact buttons: Start, Done, Delete (work on selected task)
+  - Simplified handlers with clean state management
+  - No form field manipulation from action buttons
+- 2025-11-24: **Row-Click Task Selection** - Click any table row to edit:
+  - Click table row → Form appears with task data populated
   - Proper field labels: Title, Description, Duration (minutes), Status
-  - Compact action buttons: Start, Done, Delete (no Task ID input needed)
-  - Safe duration parsing: handles "30 min", "30 minutes", or "30" formats
-  - Handler signature fixes: all action buttons return 8 values matching Gradio bindings
-  - Selection feedback: "**Selected:** Task #X - Title" displayed
+  - Safe duration parsing: handles "30 min", "30 minutes", "30m", or bare numbers
+  - Selection feedback: "**Editing:** Task #X - Title" displayed
 - 2025-11-24: **Pomodoro Timer (25+5)** on Monitor page:
   - Visual countdown display with gradient background
   - Work/Break mode auto-switching
