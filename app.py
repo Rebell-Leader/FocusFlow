@@ -392,8 +392,8 @@ with gr.Blocks(title="FocusFlow AI") as app:
             # Button to show Add form
             add_task_trigger_btn = gr.Button("➕ Add Task", variant="primary", size="sm")
             
-            # Single dynamic form (hidden by default) - using Column for better visibility control
-            with gr.Column(visible=False) as task_form:
+            # Single dynamic form (hidden by default)
+            with gr.Column(visible=False, elem_id="task-form-container") as task_form:
                 form_header = gr.Markdown("### ✏️ Task Form")
                 form_title = gr.Textbox(label="Title", placeholder="Task title")
                 form_desc = gr.Textbox(label="Description", placeholder="Describe the task", lines=2)
@@ -586,6 +586,9 @@ with gr.Blocks(title="FocusFlow AI") as app:
     add_task_trigger_btn.click(
         fn=show_add_form,
         outputs=[task_form, form_header, form_title, form_desc, form_duration, form_status, form_mode, selected_task_id, selection_info]
+    ).then(
+        fn=None,
+        js="() => { document.getElementById('task-form-container').style.display = 'block'; }"
     )
     
     # Row click handler - show form in "edit" mode with task data
@@ -742,6 +745,9 @@ with gr.Blocks(title="FocusFlow AI") as app:
         fn=save_task_handler,
         inputs=[form_mode, selected_task_id, form_title, form_desc, form_duration, form_status, form_header],
         outputs=[task_table, progress_bar, selection_info, task_form, form_header, form_title, form_desc, form_duration, form_status, form_mode, selected_task_id]
+    ).then(
+        fn=None,
+        js="() => { document.getElementById('task-form-container').style.display = 'none'; }"
     )
     
     # Cancel handler - hide form
@@ -762,6 +768,9 @@ with gr.Blocks(title="FocusFlow AI") as app:
     form_cancel_btn.click(
         fn=cancel_form,
         outputs=[task_form, form_header, form_title, form_desc, form_duration, form_status, form_mode, selected_task_id, selection_info]
+    ).then(
+        fn=None,
+        js="() => { document.getElementById('task-form-container').style.display = 'none'; }"
     )
     
     # Action button handlers for selected task (compact, no form manipulation)
