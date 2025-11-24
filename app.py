@@ -540,6 +540,11 @@ with gr.Blocks(title="FocusFlow AI") as app:
                 pomodoro_stop_btn = gr.Button("⏸️ Pause", size="sm", scale=1)
                 pomodoro_reset_btn = gr.Button("🔄 Reset", size="sm", scale=1)
             
+            # Wire up Pomodoro button handlers
+            pomodoro_start_btn.click(fn=None, js="() => { startPomodoro(); }")
+            pomodoro_stop_btn.click(fn=None, js="() => { stopPomodoro(); }")
+            pomodoro_reset_btn.click(fn=None, js="() => { resetPomodoro(); }")
+            
             # Focus log (common for both modes)
             gr.Markdown("### 🦉 Focus Agent Log")
             focus_log = gr.Textbox(

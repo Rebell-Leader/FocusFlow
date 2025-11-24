@@ -42,22 +42,31 @@ All settings are managed via environment variables (see `.env.example`):
 - API keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or vLLM endpoint settings
 
 ## Recent Changes
+- 2025-11-24: **Form Collapse Fixed** - Forms now collapse after save/cancel:
+  - JavaScript callbacks on Save/Cancel buttons hide form completely
+  - `.then()` with `js="() => { ... display: 'none' }"` implementation
+  - "+" Add Task button uses JavaScript to show form: `display: 'block'`
+  - Form properly hides after both successful saves and error handling
+- 2025-11-24: **Pomodoro Timer Fully Functional**:
+  - All control buttons now connected: Start, Pause, Reset
+  - JavaScript event handlers added: `startPomodoro()`, `stopPomodoro()`, `resetPomodoro()`
+  - Countdown works: 25 min work → 5 min break cycles
+  - Audio alerts on completion + browser notifications
+  - Status display switches: "Work Time" ↔ "Break Time"
 - 2025-11-24: **Clean Single-Form UI** - Collapsed duplicate add/edit forms into dynamic single form:
   - Single hidden form shown on-demand ("+ Add Task" button or click table row)
   - Dynamic header changes based on mode ("Add New Task" vs "Edit Task #X")
   - Form modes: hidden, add, edit (tracked via form_mode State)
   - Save button intelligently adds or updates based on current mode
   - Cancel button hides form and clears selection
-  - Saves significant screen space vs old duplicate-form design
 - 2025-11-24: **Compact Action Buttons** - Merged with progress bar at top:
   - Progress bar + Quick Actions in single horizontal Row
   - Three compact buttons: Start, Done, Delete (work on selected task)
-  - Simplified handlers with clean state management
   - No form field manipulation from action buttons
 - 2025-11-24: **Row-Click Task Selection** - Click any table row to edit:
   - Click table row → Form appears with task data populated
   - Proper field labels: Title, Description, Duration (minutes), Status
-  - Safe duration parsing: handles "30 min", "30 minutes", "30m", or bare numbers
+  - Safe duration parsing: handles multiple formats
   - Selection feedback: "**Editing:** Task #X - Title" displayed
 - 2025-11-24: **Pomodoro Timer (25+5)** on Monitor page:
   - Visual countdown display with gradient background
