@@ -610,20 +610,22 @@ with gr.Blocks(title="FocusFlow AI") as app:
         task = tasks[row_index]
         task_id = task['id']
         
-        # Parse duration back to number - handle both "30 min" and "30" formats
-        duration_str = task.get('estimated_duration', '30 min')
+        # Parse duration - extract leading digits to handle any format
+        duration_str = task.get('estimated_duration', '30')
         try:
-            # Remove " min" if present and convert to int
-            duration_num = int(duration_str.replace(' min', '').strip())
-        except (ValueError, AttributeError):
+            import re
+            # Extract first number from string (handles "30 min", "30 minutes", "30m", "30", etc.)
+            match = re.search(r'\d+', str(duration_str))
+            duration_num = int(match.group()) if match else 30
+        except (ValueError, AttributeError, TypeError):
             duration_num = 30  # Default fallback
         
         return (
             task_id,
-            task['title'],
-            task['description'],
+            task['title'] or "",
+            task['description'] or "",
             duration_num,
-            task['status'],
+            task['status'] or "Todo",
             f"**Selected:** Task #{task_id} - {task['title']}"
         )
     
@@ -688,16 +690,16 @@ with gr.Blocks(title="FocusFlow AI") as app:
     # Action button handlers for selected task
     def start_selected_task(task_id, title, desc, duration, status):
         """Set selected task as active/in progress."""
-        if task_id is None:
+        if task_id is None or task_id == "":
             return (
                 get_task_dataframe(),
                 calculate_progress(),
                 "_No task selected. Click on a row first._",
                 None,
-                title,
-                desc,
-                duration,
-                status
+                title or "",
+                desc or "",
+                duration if duration else 30,
+                status or "Todo"
             )
         
         try:
@@ -708,9 +710,9 @@ with gr.Blocks(title="FocusFlow AI") as app:
                     calculate_progress(),
                     f"▶️ Task #{task_id} set to In Progress!",
                     task_id,
-                    title,
-                    desc,
-                    duration,
+                    title or "",
+                    desc or "",
+                    duration if duration else 30,
                     "In Progress"
                 )
             else:
@@ -719,10 +721,10 @@ with gr.Blocks(title="FocusFlow AI") as app:
                     calculate_progress(),
                     f"⚠️ Could not start task (another task may already be in progress)",
                     task_id,
-                    title,
-                    desc,
-                    duration,
-                    status
+                    title or "",
+                    desc or "",
+                    duration if duration else 30,
+                    status or "Todo"
                 )
         except Exception as e:
             return (
@@ -730,24 +732,24 @@ with gr.Blocks(title="FocusFlow AI") as app:
                 calculate_progress(),
                 f"❌ Error: {str(e)}",
                 task_id,
-                title,
-                desc,
-                duration,
-                status
+                title or "",
+                desc or "",
+                duration if duration else 30,
+                status or "Todo"
             )
     
     def mark_selected_done(task_id, title, desc, duration, status):
         """Mark selected task as done."""
-        if task_id is None:
+        if task_id is None or task_id == "":
             return (
                 get_task_dataframe(),
                 calculate_progress(),
                 "_No task selected. Click on a row first._",
                 None,
-                title,
-                desc,
-                duration,
-                status
+                title or "",
+                desc or "",
+                duration if duration else 30,
+                status or "Todo"
             )
         
         try:
@@ -757,9 +759,9 @@ with gr.Blocks(title="FocusFlow AI") as app:
                 calculate_progress(),
                 f"✅ Task #{task_id} marked as Done!",
                 task_id,
-                title,
-                desc,
-                duration,
+                title or "",
+                desc or "",
+                duration if duration else 30,
                 "Done"
             )
         except Exception as e:
@@ -768,15 +770,15 @@ with gr.Blocks(title="FocusFlow AI") as app:
                 calculate_progress(),
                 f"❌ Error: {str(e)}",
                 task_id,
-                title,
-                desc,
-                duration,
-                status
+                title or "",
+                desc or "",
+                duration if duration else 30,
+                status or "Todo"
             )
     
     def delete_selected_task(task_id, title, desc, duration, status):
-        """Delete the selected task."""
-        if task_id is None:
+        """Delete the selected task and clear selection state."""
+        if task_id is None or task_id == "":
             return (
                 get_task_dataframe(),
                 calculate_progress(),
@@ -790,10 +792,11 @@ with gr.Blocks(title="FocusFlow AI") as app:
         
         try:
             task_manager.delete_task(int(task_id))
+            # Clear selection after successful delete
             return (
                 get_task_dataframe(), 
                 calculate_progress(), 
-                f"🗑️ Task #{task_id} deleted.",
+                f"🗑️ Task #{task_id} deleted. _Click a row to select another task._",
                 None,
                 "",
                 "",
@@ -801,15 +804,16 @@ with gr.Blocks(title="FocusFlow AI") as app:
                 "Todo"
             )
         except Exception as e:
+            # On error, keep current state but show error message
             return (
                 get_task_dataframe(),
                 calculate_progress(),
-                f"❌ Error: {str(e)}",
-                task_id,
-                title,
-                desc,
-                duration,
-                status
+                f"❌ Error deleting task: {str(e)}. _Task may not exist._",
+                None,  # Clear selection on error
+                "",
+                "",
+                30,
+                "Todo"
             )
     
     start_task_btn.click(
