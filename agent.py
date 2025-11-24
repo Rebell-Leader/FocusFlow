@@ -111,7 +111,8 @@ Respond in JSON format:
         """Call the LLM and parse the response."""
         try:
             if self.provider in ["openai", "vllm"]:
-                # Both OpenAI and vLLM use the same API interface
+                if not self.client:
+                    return {"verdict": "On Track", "message": "API client not initialized", "reasoning": "No client"}
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[{"role": "user", "content": prompt}],
@@ -120,6 +121,8 @@ Respond in JSON format:
                 )
                 content = response.choices[0].message.content
             else:  # anthropic
+                if not self.client:
+                    return {"verdict": "On Track", "message": "API client not initialized", "reasoning": "No client"}
                 response = self.client.messages.create(
                     model=self.model,
                     max_tokens=300,
@@ -127,6 +130,9 @@ Respond in JSON format:
                     messages=[{"role": "user", "content": prompt}]
                 )
                 content = response.content[0].text
+            
+            if not content:
+                return {"verdict": "On Track", "message": "Empty response from API", "reasoning": "No content"}
             
             # Try to parse JSON from the response
             content = content.strip()
@@ -220,7 +226,8 @@ Respond in JSON format:
         
         try:
             if self.provider in ["openai", "vllm"]:
-                # Both OpenAI and vLLM use the same API interface
+                if not self.client:
+                    return []
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[{"role": "user", "content": prompt}],
@@ -229,6 +236,8 @@ Respond in JSON format:
                 )
                 content = response.choices[0].message.content
             else:  # anthropic
+                if not self.client:
+                    return []
                 response = self.client.messages.create(
                     model=self.model,
                     max_tokens=800,
@@ -236,6 +245,9 @@ Respond in JSON format:
                     messages=[{"role": "user", "content": prompt}]
                 )
                 content = response.content[0].text
+            
+            if not content:
+                return []
             
             # Parse JSON
             content = content.strip()
