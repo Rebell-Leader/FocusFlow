@@ -256,13 +256,17 @@ def run_focus_check() -> tuple:
     if len(activity_log) > 20:
         activity_log.pop(0)
     
-    # Trigger browser alert for distracted status
+    # Trigger browser alert and audio for distracted/idle status
     alert_js = None
-    if verdict == "Distracted":
+    if verdict in ["Distracted", "Idle"]:
         import json
         safe_message = json.dumps(message)
         alert_js = f"""
         () => {{
+            const audio = document.getElementById('nudge-alert');
+            if (audio) {{
+                audio.play().catch(e => console.log('Audio play failed:', e));
+            }}
             if (Notification.permission === "granted") {{
                 new Notification("FocusFlow Alert 🦉", {{
                     body: {safe_message},
@@ -433,11 +437,106 @@ with gr.Blocks(title="FocusFlow AI") as app:
                     stop_monitor_btn = gr.Button("⏹️ Stop", variant="stop", size="sm")
                 monitor_status = gr.Textbox(label="Status", interactive=False)
             
+            # Pomodoro Timer
+            gr.Markdown("### 🍅 Pomodoro Timer")
+            with gr.Row():
+                pomodoro_display = gr.HTML(value="""
+                <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; margin-bottom: 10px;">
+                    <div id="pomodoro-time" style="font-size: 48px; font-weight: bold; color: white; font-family: monospace;">25:00</div>
+                    <div id="pomodoro-status" style="font-size: 16px; color: #f0f0f0; margin-top: 5px;">Work Time</div>
+                </div>
+                <audio id="pomodoro-alert" preload="auto">
+                    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTUI" type="audio/wav">
+                </audio>
+                <audio id="nudge-alert" preload="auto">
+                    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTUI" type="audio/wav">
+                </audio>
+                <script>
+                let pomodoroState = {
+                    minutes: 25,
+                    seconds: 0,
+                    isRunning: false,
+                    isWorkTime: true,
+                    interval: null
+                };
+                
+                function formatTime(mins, secs) {
+                    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                }
+                
+                function updateDisplay() {
+                    const display = document.getElementById('pomodoro-time');
+                    const status = document.getElementById('pomodoro-status');
+                    if (display) {
+                        display.textContent = formatTime(pomodoroState.minutes, pomodoroState.seconds);
+                        status.textContent = pomodoroState.isWorkTime ? 'Work Time' : 'Break Time';
+                    }
+                }
+                
+                function playAlert() {
+                    const audio = document.getElementById('pomodoro-alert');
+                    if (audio) {
+                        audio.play().catch(e => console.log('Audio play failed:', e));
+                    }
+                    if (Notification.permission === "granted") {
+                        new Notification("Pomodoro Timer", {
+                            body: pomodoroState.isWorkTime ? "Work session complete! Take a break." : "Break is over! Ready to work?",
+                            icon: "https://em-content.zobj.net/thumbs/160/apple/354/tomato_1f345.png"
+                        });
+                    }
+                }
+                
+                function tick() {
+                    if (pomodoroState.seconds === 0) {
+                        if (pomodoroState.minutes === 0) {
+                            playAlert();
+                            pomodoroState.isWorkTime = !pomodoroState.isWorkTime;
+                            pomodoroState.minutes = pomodoroState.isWorkTime ? 25 : 5;
+                            pomodoroState.seconds = 0;
+                        } else {
+                            pomodoroState.minutes--;
+                            pomodoroState.seconds = 59;
+                        }
+                    } else {
+                        pomodoroState.seconds--;
+                    }
+                    updateDisplay();
+                }
+                
+                function startPomodoro() {
+                    if (!pomodoroState.isRunning) {
+                        pomodoroState.isRunning = true;
+                        pomodoroState.interval = setInterval(tick, 1000);
+                    }
+                }
+                
+                function stopPomodoro() {
+                    if (pomodoroState.isRunning) {
+                        pomodoroState.isRunning = false;
+                        clearInterval(pomodoroState.interval);
+                    }
+                }
+                
+                function resetPomodoro() {
+                    stopPomodoro();
+                    pomodoroState.minutes = 25;
+                    pomodoroState.seconds = 0;
+                    pomodoroState.isWorkTime = true;
+                    updateDisplay();
+                }
+                </script>
+                """)
+            
+            with gr.Row():
+                pomodoro_start_btn = gr.Button("▶️ Start", size="sm", scale=1)
+                pomodoro_stop_btn = gr.Button("⏸️ Pause", size="sm", scale=1)
+                pomodoro_reset_btn = gr.Button("🔄 Reset", size="sm", scale=1)
+            
             # Focus log (common for both modes)
             gr.Markdown("### 🦉 Focus Agent Log")
             focus_log = gr.Textbox(
                 label="Activity Log",
-                lines=12,
+                lines=8,
                 interactive=False,
                 placeholder="Focus checks will appear here..."
             )
@@ -548,6 +647,20 @@ with gr.Blocks(title="FocusFlow AI") as app:
                 fn=stop_monitoring_wrapper,
                 outputs=[monitor_status, timer, timer_toggle_btn]
             )
+    
+    # Pomodoro timer handlers - inject JavaScript execution
+    def trigger_pomodoro_start():
+        return """<script>if(typeof startPomodoro === 'function') startPomodoro();</script>"""
+    
+    def trigger_pomodoro_stop():
+        return """<script>if(typeof stopPomodoro === 'function') stopPomodoro();</script>"""
+    
+    def trigger_pomodoro_reset():
+        return """<script>if(typeof resetPomodoro === 'function') resetPomodoro();</script>"""
+    
+    pomodoro_start_btn.click(fn=trigger_pomodoro_start, outputs=alert_trigger)
+    pomodoro_stop_btn.click(fn=trigger_pomodoro_stop, outputs=alert_trigger)
+    pomodoro_reset_btn.click(fn=trigger_pomodoro_reset, outputs=alert_trigger)
     
     manual_check_btn.click(
         fn=run_focus_check,

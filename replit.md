@@ -42,20 +42,27 @@ All settings are managed via environment variables (see `.env.example`):
 - API keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or vLLM endpoint settings
 
 ## Recent Changes
-- 2025-11-23: Initial project setup with modular architecture
-- 2025-11-23: Added OpenAI and Anthropic integrations via Replit blueprints
-- 2025-11-23: Added vLLM support for local inference (ibm-granite/granite-4.0-h-1b)
-- 2025-11-23: Implemented environment-based configuration system
-- 2025-11-23: Added task completion tracking and progress bar
-- 2025-11-23: Implemented browser notifications for distracted status
-- 2025-11-23: Separated demo and local modes with conditional UI
-- 2025-11-23: Fixed Gradio 6.0 API compatibility issues
-- 2025-11-23: Fixed vLLM provider handling in onboarding and monitoring
-- 2025-11-23: Improved JavaScript notification security with proper escaping
-- 2025-11-23: Implemented vLLM as automatic fallback when API keys missing
+- 2025-11-24: Fixed vLLM connection health check with timeout and graceful error messages
+- 2025-11-24: Enforced strict status enum (Todo, In Progress, Done) in storage layer
+- 2025-11-24: Implemented "only one task in progress" business rule with transactional enforcement
+- 2025-11-24: Removed Status textboxes from Onboarding and Tasks pages (only on Monitor)
+- 2025-11-24: Complete Tasks page redesign:
+  - Confluence-style inline add task form with dropdown status and duration input
+  - Simplified table view (read-only) for easy viewing
+  - Quick actions (Start Task, Mark Done, Delete) via Task ID
+  - Duration as number input (minutes) instead of text
+- 2025-11-24: Added Pomodoro timer (25+5) to Monitor page:
+  - Visual countdown display with gradient background
+  - Work/Break mode switching
+  - Start/Pause/Reset controls
+  - Browser notifications and audio alerts on completion
+- 2025-11-24: Implemented audio alerts:
+  - Pomodoro timer completion sound + notification
+  - AI nudge alert sound for Distracted/Idle status
+  - HTML5 audio elements with base64 encoded sounds
 - 2025-11-23: Complete UI/UX redesign with landing page and cleaner navigation
 - 2025-11-23: Task Manager now supports inline editing and quick actions
-- 2025-11-23: Simplified Monitor Dashboard based on mode (demo/local)
+- 2025-11-23: Implemented vLLM as automatic fallback when API keys missing
 
 ## User Preferences
 - Dark theme for Gradio UI (access via URL parameter: ?__theme=dark)
