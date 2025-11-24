@@ -97,19 +97,18 @@ def process_onboarding(project_description: str) -> tuple:
 
 
 def get_task_dataframe():
-    """Get tasks as a list for display."""
+    """Get tasks as a list for display (simplified - no emojis)."""
     tasks = task_manager.get_all_tasks()
     if not tasks:
         return []
     
     display_tasks = []
     for task in tasks:
-        status_emoji = "✅" if task['status'] == "Done" else "🔄" if task['status'] == "In Progress" else "⏳"
         display_tasks.append([
             task['id'],
             task['title'],
             task['description'],
-            f"{status_emoji} {task['status']}",
+            task['status'],
             task['estimated_duration']
         ])
     return display_tasks
@@ -125,13 +124,17 @@ def calculate_progress() -> float:
     return (completed / len(tasks)) * 100
 
 
-def add_new_task(title: str, description: str, duration: str) -> tuple:
-    """Add a new task."""
+def add_new_task(title: str, description: str, duration: int, status: str) -> tuple:
+    """Add a new task with all fields."""
     if not title.strip():
-        return "❌ Task title is required", get_task_dataframe(), calculate_progress()
+        return "", "", 30, "Todo", get_task_dataframe(), calculate_progress()
     
-    task_manager.add_task(title, description, duration)
-    return "✅ Task added successfully!", get_task_dataframe(), calculate_progress()
+    # Format duration as "{duration} min"
+    duration_str = f"{duration} min"
+    task_manager.add_task(title, description, duration_str, status)
+    
+    # Clear the input fields and refresh table
+    return "", "", 30, "Todo", get_task_dataframe(), calculate_progress()
 
 
 def delete_task(task_id: str) -> tuple:
@@ -344,11 +347,11 @@ with gr.Blocks(title="FocusFlow AI") as app:
                 lines=5
             )
             generate_btn = gr.Button("✨ Generate Tasks", variant="primary", size="lg")
-            onboard_status = gr.Textbox(label="Status", interactive=False)
+            onboard_status = gr.Markdown("")  # Use Markdown instead of Textbox for status messages
         
         # Tab 3: Task Manager
         with gr.Tab("📋 Tasks"):
-            gr.Markdown("## Your Tasks")
+            gr.Markdown("## 📋 Your Tasks")
             
             progress_bar = gr.Slider(
                 label="Overall Progress",
@@ -358,29 +361,41 @@ with gr.Blocks(title="FocusFlow AI") as app:
                 interactive=False
             )
             
-            # Editable task table
+            # Tasks list container with individual task rows
+            tasks_container = gr.HTML(value="<div id='tasks-list'></div>")
+            
+            # Add new task form (Confluence-style)
+            gr.Markdown("---")
+            with gr.Row():
+                new_task_title = gr.Textbox(label="", placeholder="Task title", scale=3)
+                new_task_desc = gr.Textbox(label="", placeholder="Description", scale=4)
+                new_task_duration = gr.Number(label="", value=30, minimum=5, maximum=480, step=5, scale=1, info="minutes")
+                new_task_status = gr.Dropdown(
+                    label="", 
+                    choices=["Todo", "In Progress", "Done"],
+                    value="Todo",
+                    scale=2
+                )
+                add_task_btn = gr.Button("➕", variant="primary", scale=1)
+            
+            # Table view for easier management
             task_table = gr.Dataframe(
-                headers=["ID", "Title", "Description", "Status", "Duration"],
-                value=get_task_dataframe(),
-                interactive=True,
+                headers=["ID", "Title", "Description", "Status", "Duration (min)"],
+                value=[],
+                interactive=False,
                 wrap=True
             )
             
             with gr.Row():
-                save_table_btn = gr.Button("💾 Save Table Edits", variant="primary", size="sm")
-                refresh_btn = gr.Button("🔄 Refresh", size="sm")
-                add_blank_btn = gr.Button("➕ Add New Task", variant="secondary", size="sm")
-            
-            # Quick actions row
+                refresh_btn = gr.Button("🔄 Refresh Table", size="sm")
+                
+            # Quick actions for selected task
             gr.Markdown("### Quick Actions")
             with gr.Row():
-                task_id_input = gr.Number(label="Task ID", value=1, minimum=1, precision=0)
-                with gr.Column():
-                    set_active_btn = gr.Button("▶️ Set Active", variant="secondary", size="sm")
-                    mark_done_btn = gr.Button("✅ Mark Done", variant="secondary", size="sm")
-                    delete_btn = gr.Button("🗑️ Delete", variant="stop", size="sm")
-            
-            action_status = gr.Textbox(label="Status", interactive=False)
+                task_id_input = gr.Number(label="Task ID", value=1, minimum=1, precision=0, scale=1)
+                set_active_btn = gr.Button("▶️ Start Task", variant="secondary", scale=1)
+                mark_done_btn = gr.Button("✅ Mark Done", variant="secondary", scale=1)
+                delete_btn = gr.Button("🗑️ Delete", variant="stop", scale=1)
         
         # Tab 4: Monitor
         with gr.Tab("👁️ Monitor"):
@@ -450,115 +465,53 @@ with gr.Blocks(title="FocusFlow AI") as app:
         outputs=[task_table, progress_bar]
     )
     
-    def add_blank_task():
-        """Add a blank task row for inline editing."""
-        task_manager.add_task(
-            title="New Task",
-            description="Edit this description",
-            estimated_duration="30 min"
-        )
-        return get_task_dataframe(), calculate_progress()
-    
-    add_blank_btn.click(
-        fn=add_blank_task,
-        outputs=[task_table, progress_bar]
-    )
-    
-    def save_table_edits(table_data):
-        """Save inline edits from the task table."""
-        try:
-            if not table_data:
-                return "❌ No data to save", get_task_dataframe(), calculate_progress()
-            
-            # Valid status values
-            VALID_STATUSES = {"Done", "In Progress", "Not Started"}
-            
-            updated_count = 0
-            for row in table_data:
-                if len(row) >= 5:
-                    task_id = int(row[0])
-                    title = str(row[1])
-                    description = str(row[2])
-                    status_raw = str(row[3]).strip()
-                    duration = str(row[4])
-                    
-                    # Normalize status: remove emoji prefix and trim
-                    # Split on first space and take the rest
-                    parts = status_raw.split(' ', 1)
-                    status_cleaned = (parts[1] if len(parts) > 1 else parts[0]).strip()
-                    
-                    # Validate against allowed statuses
-                    if status_cleaned not in VALID_STATUSES:
-                        # Try case-insensitive match
-                        status_match = None
-                        for valid_status in VALID_STATUSES:
-                            if status_cleaned.lower() == valid_status.lower():
-                                status_match = valid_status
-                                break
-                        
-                        if not status_match:
-                            continue  # Skip invalid status rows
-                        status = status_match
-                    else:
-                        status = status_cleaned
-                    
-                    # Update task
-                    task_manager.update_task(
-                        task_id,
-                        title=title,
-                        description=description,
-                        status=status,
-                        estimated_duration=duration
-                    )
-                    updated_count += 1
-            
-            return f"✅ Saved {updated_count} task(s)!", get_task_dataframe(), calculate_progress()
-        except Exception as e:
-            return f"❌ Error saving: {str(e)}", get_task_dataframe(), calculate_progress()
-    
-    save_table_btn.click(
-        fn=save_table_edits,
-        inputs=task_table,
-        outputs=[action_status, task_table, progress_bar]
+    # Add new task handler
+    add_task_btn.click(
+        fn=add_new_task,
+        inputs=[new_task_title, new_task_desc, new_task_duration, new_task_status],
+        outputs=[new_task_title, new_task_desc, new_task_duration, new_task_status, task_table, progress_bar]
     )
     
     def quick_set_active(task_id):
         try:
-            task_manager.set_active_task(int(task_id))
-            return "✅ Task set as active!", get_task_dataframe(), calculate_progress()
+            success = task_manager.set_active_task(int(task_id))
+            if success:
+                return get_task_dataframe(), calculate_progress()
+            else:
+                return get_task_dataframe(), calculate_progress()
         except Exception as e:
-            return f"❌ Error: {str(e)}", get_task_dataframe(), calculate_progress()
+            return get_task_dataframe(), calculate_progress()
     
     def quick_mark_done(task_id):
         try:
             task_manager.update_task(int(task_id), status="Done")
-            return "✅ Task completed! 🎉", get_task_dataframe(), calculate_progress()
+            return get_task_dataframe(), calculate_progress()
         except Exception as e:
-            return f"❌ Error: {str(e)}", get_task_dataframe(), calculate_progress()
+            return get_task_dataframe(), calculate_progress()
     
     def quick_delete(task_id):
         try:
             task_manager.delete_task(int(task_id))
-            return "✅ Task deleted", get_task_dataframe(), calculate_progress()
+            return get_task_dataframe(), calculate_progress()
         except Exception as e:
-            return f"❌ Error: {str(e)}", get_task_dataframe(), calculate_progress()
+            return get_task_dataframe(), calculate_progress()
     
     set_active_btn.click(
         fn=quick_set_active,
         inputs=task_id_input,
-        outputs=[action_status, task_table, progress_bar]
+        outputs=[task_table, progress_bar]
     )
     
     mark_done_btn.click(
         fn=quick_mark_done,
         inputs=task_id_input,
-        outputs=[action_status, task_table, progress_bar]
+        outputs=[task_table, progress_bar]
     )
     
     delete_btn.click(
         fn=quick_delete,
         inputs=task_id_input,
-        outputs=[action_status, task_table, progress_bar]
+        outputs=[task_table, progress_bar]
     )
     
     # Monitor handlers
