@@ -741,10 +741,11 @@ with gr.Blocks(title="FocusFlow AI") as app:
             )
             
             # Voice feedback player (only shows if voice is available)
+            # IMPORTANT: autoplay=False to prevent errors when voice_audio is None
             voice_audio = gr.Audio(
                 label="🔊 Voice Feedback",
                 visible=True,
-                autoplay=True,
+                autoplay=False,
                 show_label=True,
                 elem_id="voice-feedback-player"
             )
@@ -1124,8 +1125,18 @@ with gr.Blocks(title="FocusFlow AI") as app:
     
     check_frequency.change(fn=set_check_interval, inputs=check_frequency, outputs=[focus_log])
     
+    def safe_run_focus_check():
+        """Wrapper for run_focus_check that safely handles None audio."""
+        focus_result, alert_js, voice_data = run_focus_check()
+        # Return gr.update with value=None instead of None directly
+        if voice_data is None:
+            voice_update = gr.update(value=None)
+        else:
+            voice_update = voice_data
+        return focus_result, alert_js, voice_update
+    
     manual_check_btn.click(
-        fn=run_focus_check,
+        fn=safe_run_focus_check,
         outputs=[focus_log, alert_trigger, voice_audio]
     )
     
@@ -1168,14 +1179,20 @@ with gr.Blocks(title="FocusFlow AI") as app:
     
     # Timer tick handler
     def update_on_tick():
-        """Update focus log on timer tick."""
+        """Update focus log on timer tick with safe audio handling."""
         focus_result, alert_js, voice_data = run_focus_check()
         
         alert_html = ""
         if alert_js:
             alert_html = f'<script>{alert_js}</script>'
         
-        return focus_result, alert_html, voice_data
+        # Safely handle None audio data
+        if voice_data is None:
+            voice_update = gr.update(value=None)
+        else:
+            voice_update = voice_data
+        
+        return focus_result, alert_html, voice_update
     
     timer.tick(
         fn=update_on_tick,
