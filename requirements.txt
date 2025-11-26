@@ -5,3 +5,5 @@ watchdog>=3.0.0
 python-dotenv>=1.0.0
 vllm>=0.6.0
 mcp
+elevenlabs>=1.0.0
+elevenlabs
