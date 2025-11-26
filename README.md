@@ -172,7 +172,8 @@ In Claude Desktop, try:
 
 ### Version 1.0 (Hackathon Release)
 - ✅ **MCP Integration** - Full Model Context Protocol support with 8 tools and 3 resources
-- ✅ **Demo API Keys** - Support for `DEMO_ANTHROPIC_API_KEY` and `DEMO_OPENAI_API_KEY` for hackathon deployments
+- ✅ **Voice Feedback** - ElevenLabs integration for Duolingo-style audio nudges
+- ✅ **Demo API Keys** - Support for `DEMO_ANTHROPIC_API_KEY`, `DEMO_OPENAI_API_KEY`, and `DEMO_ELEVEN_API_KEY` for hackathon deployments
 - ✅ **Productivity Dashboard** - Focus scores, streaks, weekly trends, and state distribution charts
 - ✅ **Mock AI Mode** - Works without API keys for testing and demos
 - ✅ **Graceful Degradation** - Automatically falls back to Mock AI if API keys are invalid or out of credits
@@ -201,12 +202,14 @@ In Claude Desktop, try:
 |----------|-------------|--------------|
 | `OPENAI_API_KEY` | Your personal OpenAI API key | https://platform.openai.com/api-keys |
 | `ANTHROPIC_API_KEY` | Your personal Anthropic API key | https://console.anthropic.com/ |
+| `ELEVEN_API_KEY` | Your personal ElevenLabs API key (optional) | https://elevenlabs.io/api |
 
 #### Demo API Keys (For Hackathon Organizers)
 | Variable | Description | Use Case |
 |----------|-------------|----------|
 | `DEMO_ANTHROPIC_API_KEY` | Shared Anthropic key for demos | Set on HuggingFace Spaces for judges/testers |
 | `DEMO_OPENAI_API_KEY` | Shared OpenAI key for demos | Set on HuggingFace Spaces for judges/testers |
+| `DEMO_ELEVEN_API_KEY` | Shared ElevenLabs key for voice | Set on HuggingFace Spaces for voice feedback |
 
 **How It Works:**
 ```python
@@ -214,6 +217,11 @@ In Claude Desktop, try:
 1. Check DEMO_ANTHROPIC_API_KEY (hackathon demo key)
 2. If not found, check ANTHROPIC_API_KEY (user's personal key)
 3. If not found or invalid, fall back to Mock AI (no errors!)
+
+# Voice integration (optional):
+1. Check DEMO_ELEVEN_API_KEY (hackathon demo key)
+2. If not found, check ELEVEN_API_KEY (user's personal key)
+3. If not found, gracefully disable voice (text-only mode)
 ```
 
 #### vLLM Settings (Local Inference)
@@ -644,6 +652,7 @@ After deploying to any platform:
 - **Backend**: Python 3.11+
 - **Database**: SQLite (zero-config persistence)
 - **AI Providers**: OpenAI GPT-4, Anthropic Claude, vLLM, or Mock
+- **Voice**: ElevenLabs text-to-speech (optional)
 - **File Monitoring**: Watchdog (real-time filesystem events)
 - **MCP Integration**: Model Context Protocol for LLM interoperability
 - **Charts**: Gradio native plots (pandas DataFrames)
@@ -671,7 +680,8 @@ MIT License - feel free to use this for personal or commercial projects!
 
 ## 🙏 Acknowledgments
 
-- Built for the [Gradio MCP Hackathon](https://gradio.app)
+- Built for the [Gradio MCP Hackathon](https://gradio.app) - competing for **Track 1: Building MCP**
+- Voice integration powered by [ElevenLabs](https://elevenlabs.io) - competing for **$2,000 Best Use of ElevenLabs** sponsor award
 - Inspired by Duolingo's encouraging UX
 - Uses [Model Context Protocol](https://modelcontextprotocol.io) for LLM integration
 

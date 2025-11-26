@@ -42,6 +42,12 @@ activity_log: List[str] = []
 demo_text_content = ""  # For demo mode text monitoring
 
 
+def get_voice_status_ui() -> str:
+    """Get voice integration status for UI display."""
+    from voice import get_voice_status
+    return get_voice_status()
+
+
 def initialize_agent() -> str:
     """
     Initialize the AI agent with fallback to Mock agent if API keys are missing.
@@ -382,8 +388,9 @@ with gr.Blocks(title="FocusFlow AI") as app:
             Keep focused on your coding tasks with Duolingo-style nudges!
             """)
             
-            # Status indicator
-            init_status = gr.Textbox(label="Status", value="Initializing...", interactive=False, scale=1)
+            # Status indicators
+            init_status = gr.Textbox(label="AI Status", value="Initializing...", interactive=False, scale=1)
+            voice_status_display = gr.Textbox(label="Voice Status", value="Checking...", interactive=False, scale=1)
             
             gr.Markdown("""
             ## ✨ Features
@@ -394,6 +401,7 @@ with gr.Blocks(title="FocusFlow AI") as app:
             - **🦉 Duolingo-Style Nudges**: Encouraging, sassy, and gentle reminders
             - **🔔 Browser Notifications**: Get alerted when you're distracted
             - **🚀 Multi-Provider AI**: OpenAI, Anthropic, or local vLLM support
+            - **🔊 Voice Feedback**: ElevenLabs voice alerts for maximum engagement
             
             ## ⚙️ Current Configuration
             """)
@@ -688,6 +696,7 @@ with gr.Blocks(title="FocusFlow AI") as app:
     
     # Event handlers
     app.load(fn=initialize_agent, outputs=init_status)
+    app.load(fn=get_voice_status_ui, outputs=voice_status_display)
     
     # Onboarding handlers
     generate_btn.click(
