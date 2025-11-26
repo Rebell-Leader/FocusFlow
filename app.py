@@ -740,12 +740,11 @@ with gr.Blocks(title="FocusFlow AI") as app:
                 placeholder="Focus checks will appear here..."
             )
             
-            # Voice feedback player (only shows if voice is available)
-            # IMPORTANT: autoplay=False to prevent errors when voice_audio is None
+            # Voice feedback player (autoplay enabled for alerts in background tabs)
             voice_audio = gr.Audio(
                 label="🔊 Voice Feedback",
                 visible=True,
-                autoplay=False,
+                autoplay=True,
                 show_label=True,
                 elem_id="voice-feedback-player"
             )
@@ -1128,11 +1127,11 @@ with gr.Blocks(title="FocusFlow AI") as app:
     def safe_run_focus_check():
         """Wrapper for run_focus_check that safely handles None audio."""
         focus_result, alert_js, voice_data = run_focus_check()
-        # Return gr.update with value=None instead of None directly
+        # If no voice data, hide the component; otherwise pass the file path
         if voice_data is None:
-            voice_update = gr.update(value=None)
+            voice_update = gr.update(visible=False)
         else:
-            voice_update = voice_data
+            voice_update = gr.update(visible=True, value=voice_data)
         return focus_result, alert_js, voice_update
     
     manual_check_btn.click(
@@ -1186,11 +1185,11 @@ with gr.Blocks(title="FocusFlow AI") as app:
         if alert_js:
             alert_html = f'<script>{alert_js}</script>'
         
-        # Safely handle None audio data
+        # Safely handle None audio data - hide component if no audio
         if voice_data is None:
-            voice_update = gr.update(value=None)
+            voice_update = gr.update(visible=False)
         else:
-            voice_update = voice_data
+            voice_update = gr.update(visible=True, value=voice_data)
         
         return focus_result, alert_html, voice_update
     
