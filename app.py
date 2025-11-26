@@ -129,6 +129,11 @@ def initialize_agent() -> tuple:
             return (f"ℹ️ Running in DEMO MODE with Mock AI (no API keys needed). Perfect for testing! 🎭",
                    f"**AI Provider:** `MOCK AI (Demo Mode)`")
         
+        # Fallback - should not reach here but ensure function returns
+        focus_agent = MockFocusAgent()
+        return (f"ℹ️ Using Mock AI for demo",
+               f"**AI Provider:** `MOCK AI (Fallback)`")
+        
     except Exception as e:
         # Fall back to mock on any error
         focus_agent = MockFocusAgent()
@@ -289,7 +294,9 @@ def get_activity_summary() -> str:
 
 
 def run_focus_check() -> tuple:
-    """Run the focus check analysis."""
+    """Run the focus check analysis with distraction escalation."""
+    global consecutive_distracted
+    
     if not focus_agent:
         return "⚠️ Agent not initialized. Check environment variables.", None, None
     
@@ -312,6 +319,14 @@ def run_focus_check() -> tuple:
     verdict = result.get("verdict", "Unknown")
     message = result.get("message", "No message")
     
+    # Handle distraction escalation logic
+    if verdict == "On Track":
+        # Reset counter when back on track
+        consecutive_distracted = 0
+    elif verdict == "Distracted":
+        # Increment distraction counter
+        consecutive_distracted += 1
+    
     # Log to metrics if we have an active task
     if active_task:
         metrics_tracker.log_focus_check(
@@ -332,17 +347,29 @@ def run_focus_check() -> tuple:
         activity_log.pop(0)
     
     # Generate voice feedback (optional, graceful if unavailable)
-    voice_audio = voice_generator.get_focus_message_audio(verdict, message)
+    voice_audio = None
+    try:
+        voice_audio = voice_generator.get_focus_message_audio(verdict, message)
+    except Exception as e:
+        print(f"Voice generation error: {e}")
     
-    # Trigger browser alert and audio for distracted/idle status
+    # Trigger browser alert and audio for distracted/idle status with escalation
     alert_js = None
     if verdict in ["Distracted", "Idle"]:
         import json
         safe_message = json.dumps(message)
+        
+        # Escalation logic:
+        # 1st distraction: play sound only
+        # 2nd distraction: play sound again
+        # 3rd+ distraction: add voice feedback
+        play_voice = consecutive_distracted >= 3
+        
         alert_js = f"""
         () => {{
             const audio = document.getElementById('nudge-alert');
             if (audio) {{
+                audio.currentTime = 0;
                 audio.play().catch(e => console.log('Audio play failed:', e));
             }}
             if (Notification.permission === "granted") {{
@@ -594,6 +621,15 @@ with gr.Blocks(title="FocusFlow AI") as app:
                     start_monitor_btn = gr.Button("▶️ Start", variant="primary", size="sm")
                     stop_monitor_btn = gr.Button("⏹️ Stop", variant="stop", size="sm")
                 monitor_status = gr.Textbox(label="Status", interactive=False)
+            
+            # Check frequency selector
+            gr.Markdown("### ⚙️ Monitoring Settings")
+            check_frequency = gr.Dropdown(
+                label="Check Frequency",
+                choices=["30 seconds", "1 minute", "5 minutes", "10 minutes"],
+                value="30 seconds",
+                interactive=True
+            )
             
             # Pomodoro Timer
             gr.Markdown("### 🍅 Pomodoro Timer")
