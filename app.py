@@ -13,6 +13,7 @@ from storage import TaskManager
 from monitor import FileMonitor
 from agent import FocusAgent, MockFocusAgent
 from metrics import MetricsTracker
+from voice import voice_generator, get_voice_status
 
 # Load environment variables
 load_dotenv()
@@ -261,7 +262,7 @@ def get_activity_summary() -> str:
 def run_focus_check() -> tuple:
     """Run the focus check analysis."""
     if not focus_agent:
-        return "⚠️ Agent not initialized. Check environment variables.", None
+        return "⚠️ Agent not initialized. Check environment variables.", None, None
     
     active_task = task_manager.get_active_task()
     
@@ -301,6 +302,9 @@ def run_focus_check() -> tuple:
     if len(activity_log) > 20:
         activity_log.pop(0)
     
+    # Generate voice feedback (optional, graceful if unavailable)
+    voice_audio = voice_generator.get_focus_message_audio(verdict, message)
+    
     # Trigger browser alert and audio for distracted/idle status
     alert_js = None
     if verdict in ["Distracted", "Idle"]:
@@ -322,7 +326,7 @@ def run_focus_check() -> tuple:
         }}
         """
     
-    return "\n".join(activity_log), alert_js
+    return "\n".join(activity_log), alert_js, voice_audio
 
 
 def refresh_dashboard() -> tuple:
@@ -664,6 +668,15 @@ with gr.Blocks(title="FocusFlow AI") as app:
                 lines=8,
                 interactive=False,
                 placeholder="Focus checks will appear here..."
+            )
+            
+            # Voice feedback player (only shows if voice is available)
+            voice_audio = gr.Audio(
+                label="🔊 Voice Feedback",
+                visible=True,
+                autoplay=True,
+                show_label=True,
+                elem_id="voice-feedback-player"
             )
             
             with gr.Row():
@@ -1041,7 +1054,7 @@ with gr.Blocks(title="FocusFlow AI") as app:
     
     manual_check_btn.click(
         fn=run_focus_check,
-        outputs=[focus_log, alert_trigger]
+        outputs=[focus_log, alert_trigger, voice_audio]
     )
     
     # Timer toggle handler
@@ -1084,17 +1097,17 @@ with gr.Blocks(title="FocusFlow AI") as app:
     # Timer tick handler
     def update_on_tick():
         """Update focus log on timer tick."""
-        focus_result, alert_js = run_focus_check()
+        focus_result, alert_js, voice_data = run_focus_check()
         
         alert_html = ""
         if alert_js:
             alert_html = f'<script>{alert_js}</script>'
         
-        return focus_result, alert_html
+        return focus_result, alert_html, voice_data
     
     timer.tick(
         fn=update_on_tick,
-        outputs=[focus_log, alert_trigger]
+        outputs=[focus_log, alert_trigger, voice_audio]
     )
 
 
