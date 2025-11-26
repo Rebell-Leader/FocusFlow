@@ -38,6 +38,8 @@ metrics_tracker = MetricsTracker()
 focus_agent: Optional[FocusAgent] = None
 monitoring_active = False
 timer_active = False  # Track timer state globally
+check_interval = MONITOR_INTERVAL  # Track current check interval (user-configurable)
+consecutive_distracted = 0  # Track distraction escalation
 activity_log: List[str] = []
 demo_text_content = ""  # For demo mode text monitoring
 
@@ -1071,19 +1073,20 @@ with gr.Blocks(title="FocusFlow AI") as app:
                 outputs=[monitor_status, timer, timer_toggle_btn]
             )
     
-    # Pomodoro timer handlers - inject JavaScript execution
-    def trigger_pomodoro_start():
-        return """<script>if(typeof startPomodoro === 'function') startPomodoro();</script>"""
+    # Check frequency handler
+    def set_check_interval(freq_label):
+        """Update the monitoring check interval based on user selection."""
+        global check_interval
+        freq_map = {
+            "30 seconds": 30,
+            "1 minute": 60,
+            "5 minutes": 300,
+            "10 minutes": 600
+        }
+        check_interval = freq_map.get(freq_label, 30)
+        return f"✅ Check interval set to {freq_label}"
     
-    def trigger_pomodoro_stop():
-        return """<script>if(typeof stopPomodoro === 'function') stopPomodoro();</script>"""
-    
-    def trigger_pomodoro_reset():
-        return """<script>if(typeof resetPomodoro === 'function') resetPomodoro();</script>"""
-    
-    pomodoro_start_btn.click(fn=trigger_pomodoro_start, outputs=alert_trigger)
-    pomodoro_stop_btn.click(fn=trigger_pomodoro_stop, outputs=alert_trigger)
-    pomodoro_reset_btn.click(fn=trigger_pomodoro_reset, outputs=alert_trigger)
+    check_frequency.change(fn=set_check_interval, inputs=check_frequency, outputs=[focus_log])
     
     manual_check_btn.click(
         fn=run_focus_check,
