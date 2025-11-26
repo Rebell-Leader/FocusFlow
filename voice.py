@@ -4,9 +4,9 @@ Provides optional voice feedback for focus agent and Pomodoro timer.
 Gracefully falls back to text-only mode if API key is missing or quota exceeded.
 """
 import os
-import base64
+import tempfile
 from typing import Optional, Dict
-from io import BytesIO
+from pathlib import Path
 
 
 class VoiceGenerator:
@@ -45,14 +45,14 @@ class VoiceGenerator:
     
     def text_to_speech(self, text: str, emotion: str = "neutral") -> Optional[str]:
         """
-        Convert text to speech and return base64-encoded audio.
+        Convert text to speech and return path to temporary audio file.
         
         Args:
             text: Text to convert to speech
             emotion: Emotion hint (not used in current implementation)
         
         Returns:
-            Base64-encoded MP3 audio string, or None if voice unavailable
+            Path to temporary MP3 file, or None if voice unavailable
         """
         # Check if voice is enabled globally
         if os.getenv("VOICE_ENABLED", "true").lower() == "false":
@@ -73,10 +73,16 @@ class VoiceGenerator:
             # Convert generator/stream to bytes
             audio_bytes = b"".join(audio)
             
-            # Encode to base64 for browser playback
-            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+            # Save to temporary file (Gradio expects file path, not data URL)
+            temp_file = tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=".mp3",
+                prefix="focusflow_voice_"
+            )
+            temp_file.write(audio_bytes)
+            temp_file.close()
             
-            return f"data:audio/mp3;base64,{audio_base64}"
+            return temp_file.name
             
         except Exception as e:
             # Graceful degradation - log error but don't crash
@@ -92,7 +98,7 @@ class VoiceGenerator:
             message: Text message to speak
         
         Returns:
-            Base64-encoded audio or None
+            Path to temporary audio file or None
         """
         if not self.available:
             return None
@@ -115,7 +121,7 @@ class VoiceGenerator:
             event_type: "work_complete" or "break_complete"
         
         Returns:
-            Base64-encoded audio or None
+            Path to temporary audio file or None
         """
         if not self.available:
             return None
