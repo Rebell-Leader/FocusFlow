@@ -31,6 +31,17 @@ class FocusAgent:
             self.client = Anthropic(api_key=self.api_key) if self.api_key else None
             self.model = model or "claude-3-5-sonnet-20241022"
             self.connection_healthy = bool(self.api_key)
+        elif self.provider == "gemini":
+            import google.generativeai as genai
+            self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+            if self.api_key:
+                genai.configure(api_key=self.api_key)
+                self.client = genai.GenerativeModel(model or "gemini-2.0-flash-exp")
+                self.model = model or "gemini-2.0-flash-exp"
+                self.connection_healthy = True
+            else:
+                self.client = None
+                self.connection_healthy = False
         elif self.provider == "vllm":
             from openai import OpenAI
             import httpx
@@ -49,7 +60,7 @@ class FocusAgent:
                 self.client = None
                 self.connection_healthy = False
         else:
-            raise ValueError(f"Unsupported provider: {provider}. Supported: openai, anthropic, vllm")
+            raise ValueError(f"Unsupported provider: {provider}. Supported: openai, anthropic, gemini, vllm")
     
     def _create_analysis_prompt(self, active_task: Dict, recent_activity: List[Dict]) -> str:
         """Create the analysis prompt for the LLM."""
@@ -118,6 +129,17 @@ Respond in JSON format:
                     max_tokens=300
                 )
                 content = response.choices[0].message.content
+            elif self.provider == "gemini":
+                if not self.client:
+                    return {"verdict": "On Track", "message": "API client not initialized", "reasoning": "No client"}
+                response = self.client.generate_content(
+                    prompt,
+                    generation_config={
+                        "temperature": 0.7,
+                        "max_output_tokens": 300,
+                    }
+                )
+                content = response.text
             else:  # anthropic
                 if not self.client:
                     return {"verdict": "On Track", "message": "API client not initialized", "reasoning": "No client"}
@@ -233,6 +255,17 @@ Respond in JSON format:
                     max_tokens=800
                 )
                 content = response.choices[0].message.content
+            elif self.provider == "gemini":
+                if not self.client:
+                    return []
+                response = self.client.generate_content(
+                    prompt,
+                    generation_config={
+                        "temperature": 0.7,
+                        "max_output_tokens": 800,
+                    }
+                )
+                content = response.text
             else:  # anthropic
                 if not self.client:
                     return []

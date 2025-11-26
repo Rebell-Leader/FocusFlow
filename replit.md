@@ -6,7 +6,7 @@ FocusFlow is an AI-powered "Accountability Buddy" that monitors your coding work
 ## Tech Stack
 - **Frontend/UI:** Gradio 6.0+
 - **Backend:** Python 3.11
-- **AI/LLM:** OpenAI (GPT-4o) / Anthropic (Claude 3.5 Sonnet) / vLLM (ibm-granite/granite-4.0-h-1b)
+- **AI/LLM:** OpenAI (GPT-4o) / Anthropic (Claude 3.5 Sonnet) / Google Gemini (gemini-2.0-flash-exp) / vLLM (ibm-granite/granite-4.0-h-1b)
 - **File Monitoring:** Watchdog library
 - **Storage:** SQLite
 - **Configuration:** Environment variables via python-dotenv
@@ -44,11 +44,17 @@ FocusFlow is an AI-powered "Accountability Buddy" that monitors your coding work
 ## Configuration
 All settings are managed via environment variables (see `.env.example`):
 - `LAUNCH_MODE`: "demo" (text area) or "local" (file system)
-- `AI_PROVIDER`: "openai", "anthropic", or "vllm"
+- `AI_PROVIDER`: "openai", "anthropic", "gemini", or "vllm"
 - `MONITOR_INTERVAL`: Check frequency in seconds (default: 30)
-- API keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or vLLM endpoint settings
+- API keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or vLLM endpoint settings
 
 ## Recent Changes
+- 2025-11-26: **Google Gemini AI Provider Added** - 4th AI provider option:
+  - Added Google Gemini (gemini-2.0-flash-exp) support to agent.py
+  - Installed google-generativeai package
+  - Updated .env.example with GEMINI_API_KEY and DEMO_GEMINI_API_KEY
+  - Updated README.md with Gemini installation and configuration
+  - Full feature parity with OpenAI, Anthropic, and vLLM providers
 - 2025-11-26: **MCP Integration Complete** - Full Model Context Protocol support:
   - 8 MCP tools exposed: add_task, get_current_task, start_task, mark_task_done, get_all_tasks, delete_task, get_productivity_stats
   - 3 MCP resources: focusflow://tasks/all, focusflow://tasks/active, focusflow://stats

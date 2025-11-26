@@ -48,10 +48,11 @@ def get_voice_status_ui() -> str:
     return get_voice_status()
 
 
-def initialize_agent() -> str:
+def initialize_agent() -> tuple:
     """
     Initialize the AI agent with fallback to Mock agent if API keys are missing.
     Supports DEMO_* API keys for hackathon deployments (checked first).
+    Returns: (status_message, actual_provider_display)
     """
     global focus_agent, AI_PROVIDER
     
@@ -67,7 +68,8 @@ def initialize_agent() -> str:
                 try:
                     focus_agent = FocusAgent(provider="anthropic", api_key=api_key)
                     key_type = "demo" if os.getenv("DEMO_ANTHROPIC_API_KEY") else "user"
-                    return f"✅ Anthropic Claude initialized successfully ({key_type} key)"
+                    return (f"✅ Anthropic Claude initialized successfully ({key_type} key)", 
+                           f"**AI Provider:** `ANTHROPIC (Claude)`")
                 except Exception as e:
                     print(f"⚠️ Anthropic API error: {e}")
                     use_mock = True
@@ -81,9 +83,25 @@ def initialize_agent() -> str:
                 try:
                     focus_agent = FocusAgent(provider="openai", api_key=api_key)
                     key_type = "demo" if os.getenv("DEMO_OPENAI_API_KEY") else "user"
-                    return f"✅ OpenAI GPT-4 initialized successfully ({key_type} key)"
+                    return (f"✅ OpenAI GPT-4 initialized successfully ({key_type} key)",
+                           f"**AI Provider:** `OPENAI (GPT-4o)`")
                 except Exception as e:
                     print(f"⚠️ OpenAI API error: {e}")
+                    use_mock = True
+        
+        elif AI_PROVIDER == "gemini":
+            # Check for demo key first, then user key
+            api_key = os.getenv("DEMO_GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                use_mock = True
+            else:
+                try:
+                    focus_agent = FocusAgent(provider="gemini", api_key=api_key)
+                    key_type = "demo" if os.getenv("DEMO_GEMINI_API_KEY") else "user"
+                    return (f"✅ Google Gemini initialized successfully ({key_type} key)",
+                           f"**AI Provider:** `GEMINI (Flash 2.0)`")
+                except Exception as e:
+                    print(f"⚠️ Gemini API error: {e}")
                     use_mock = True
         
         elif AI_PROVIDER == "vllm":
@@ -97,7 +115,8 @@ def initialize_agent() -> str:
                 if not focus_agent.connection_healthy:
                     use_mock = True
                 else:
-                    return f"✅ vLLM initialized successfully!"
+                    return (f"✅ vLLM initialized successfully!",
+                           f"**AI Provider:** `VLLM (Local)`")
             except Exception as e:
                 print(f"⚠️ vLLM error: {e}")
                 use_mock = True
@@ -105,12 +124,14 @@ def initialize_agent() -> str:
         # Use mock agent if no API keys or connections available
         if use_mock:
             focus_agent = MockFocusAgent()
-            return f"ℹ️ Running in DEMO MODE with Mock AI (no API keys needed). Perfect for testing! 🎭"
+            return (f"ℹ️ Running in DEMO MODE with Mock AI (no API keys needed). Perfect for testing! 🎭",
+                   f"**AI Provider:** `MOCK AI (Demo Mode)`")
         
     except Exception as e:
         # Fall back to mock on any error
         focus_agent = MockFocusAgent()
-        return f"ℹ️ Using Mock AI for demo (Error: {str(e)}) 🎭"
+        return (f"ℹ️ Using Mock AI for demo (Error: {str(e)}) 🎭",
+               f"**AI Provider:** `MOCK AI (Error Fallback)`")
 
 
 def process_onboarding(project_description: str) -> tuple:
@@ -406,9 +427,12 @@ with gr.Blocks(title="FocusFlow AI") as app:
             ## ⚙️ Current Configuration
             """)
             
+            # Dynamic AI provider display
+            ai_provider_display = gr.Markdown(f"**AI Provider:** `{AI_PROVIDER.upper()}`")
+            
             with gr.Row():
                 gr.Markdown(f"**Mode:** `{LAUNCH_MODE.upper()}`")
-                gr.Markdown(f"**AI Provider:** `{AI_PROVIDER.upper()}`")
+                ai_provider_display
                 gr.Markdown(f"**Check Interval:** `{MONITOR_INTERVAL}s`")
             
             if LAUNCH_MODE == "demo":
@@ -695,7 +719,7 @@ with gr.Blocks(title="FocusFlow AI") as app:
                     timer_toggle_btn = gr.Button("▶️ Start Auto-Check", variant="secondary")
     
     # Event handlers
-    app.load(fn=initialize_agent, outputs=init_status)
+    app.load(fn=initialize_agent, outputs=[init_status, ai_provider_display])
     app.load(fn=get_voice_status_ui, outputs=voice_status_display)
     
     # Onboarding handlers

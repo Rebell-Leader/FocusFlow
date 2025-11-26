@@ -99,7 +99,11 @@ export OPENAI_API_KEY=your_key_here
 export AI_PROVIDER=anthropic
 export ANTHROPIC_API_KEY=your_key_here
 
-# Option 3: vLLM (local inference)
+# Option 3: Google Gemini
+export AI_PROVIDER=gemini
+export GEMINI_API_KEY=your_key_here
+
+# Option 4: vLLM (local inference)
 export AI_PROVIDER=vllm
 export VLLM_BASE_URL=http://localhost:8000/v1
 export VLLM_MODEL=ibm-granite/granite-4.0-h-1b
@@ -117,6 +121,7 @@ To enable AI features on demo deployments, set **demo API keys** as environment 
 ```bash
 DEMO_ANTHROPIC_API_KEY=sk-ant-xxx  # Checked first, falls back to user keys
 DEMO_OPENAI_API_KEY=sk-xxx         # Same fallback logic
+DEMO_GEMINI_API_KEY=xxx            # Same fallback logic
 ```
 
 If demo keys run out of credits, FocusFlow gracefully falls back to Mock AI mode automatically.
@@ -651,7 +656,7 @@ After deploying to any platform:
 - **Frontend**: Gradio 5.0+ (Python UI framework)
 - **Backend**: Python 3.11+
 - **Database**: SQLite (zero-config persistence)
-- **AI Providers**: OpenAI GPT-4, Anthropic Claude, vLLM, or Mock
+- **AI Providers**: OpenAI GPT-4, Anthropic Claude, Google Gemini, vLLM, or Mock
 - **Voice**: ElevenLabs text-to-speech (optional)
 - **File Monitoring**: Watchdog (real-time filesystem events)
 - **MCP Integration**: Model Context Protocol for LLM interoperability
