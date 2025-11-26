@@ -5,9 +5,12 @@ Enables LLM assistants like Claude Desktop to interact with FocusFlow.
 import gradio as gr
 from typing import Dict, List, Optional
 from storage import TaskManager
+from metrics import MetricsTracker
 
-# Initialize task manager for MCP tools
+# Initialize shared instances for MCP tools
+# Note: These are separate from app.py's instances but use the same database
 task_manager = TaskManager()
+metrics_tracker = MetricsTracker()
 
 
 @gr.mcp.tool()
@@ -67,12 +70,16 @@ def start_task(task_id: int) -> str:
         Success or error message
     """
     try:
+        # Check if task exists first
+        task = task_manager.get_task(task_id)
+        if not task:
+            return f"❌ Task {task_id} not found. Use get_all_tasks() to see available tasks."
+        
         success = task_manager.set_active_task(task_id)
         if success:
-            task = task_manager.get_task(task_id)
             return f"✅ Task {task_id} started: '{task['title']}'. FocusFlow is now monitoring your progress!"
         else:
-            return f"❌ Failed to start task {task_id}. Task may not exist or is already Done."
+            return f"❌ Failed to start task {task_id}. Task is already marked as Done."
     except Exception as e:
         return f"❌ Error starting task: {str(e)}"
 
@@ -89,8 +96,12 @@ def mark_task_done(task_id: int) -> str:
         Success or error message
     """
     try:
-        task_manager.update_task(task_id, status="Done")
+        # Check if task exists first
         task = task_manager.get_task(task_id)
+        if not task:
+            return f"❌ Task {task_id} not found. Use get_all_tasks() to see available tasks."
+        
+        task_manager.update_task(task_id, status="Done")
         return f"🎉 Task {task_id} completed: '{task['title']}'! Great work!"
     except Exception as e:
         return f"❌ Error marking task done: {str(e)}"
@@ -148,12 +159,13 @@ def delete_task(task_id: int) -> str:
 @gr.mcp.tool()
 def get_productivity_stats() -> str:
     """
-    Get productivity statistics and insights.
+    Get productivity statistics and insights including focus metrics.
     
     Returns:
-        Summary of task completion and progress
+        Summary of task completion, progress, and focus scores
     """
     try:
+        # Task statistics
         tasks = task_manager.get_all_tasks()
         if not tasks:
             return "📊 No tasks to analyze yet. Create some tasks to see your productivity stats!"
@@ -165,15 +177,27 @@ def get_productivity_stats() -> str:
         
         completion_rate = (completed / total * 100) if total > 0 else 0
         
-        return f"""📊 Productivity Statistics:
+        # Focus metrics
+        today_stats = metrics_tracker.get_today_stats()
+        current_streak = metrics_tracker.get_current_streak()
+        
+        result = f"""📊 Productivity Statistics:
 
-📈 Overall Progress: {completion_rate:.1f}% complete
-✅ Completed: {completed} tasks
+📋 Task Progress:
+✅ Completed: {completed}/{total} tasks ({completion_rate:.1f}%)
 🔄 In Progress: {in_progress} task(s)
 ⏳ To Do: {todo} tasks
-📋 Total Tasks: {total}
+
+🎯 Focus Metrics (Today):
+⭐ Focus Score: {today_stats['focus_score']}/100
+🔥 Current Streak: {current_streak} consecutive "On Track" checks
+📊 Total Checks: {today_stats['total_checks']}
+  • On Track: {today_stats['on_track']}
+  • Distracted: {today_stats['distracted']}
+  • Idle: {today_stats['idle']}
 
 Keep up the good work! 🎯"""
+        return result
     except Exception as e:
         return f"❌ Error getting stats: {str(e)}"
 
