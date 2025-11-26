@@ -128,9 +128,9 @@ class FileMonitor:
     
     def __init__(self):
         """Initialize the file monitor."""
-        self.observer: Optional[Observer] = None
-        self.handler: Optional[ContentAwareHandler] = None
-        self.watching_path: Optional[str] = None
+        self.observer = None
+        self.handler = None
+        self.watching_path = None
     
     def start(self, path: str, callback: Optional[Callable] = None):
         """Start monitoring a directory."""

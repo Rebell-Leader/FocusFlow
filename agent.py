@@ -2,15 +2,13 @@
 AI Focus Agent with OpenAI/Claude integration and personality system.
 """
 import os
-from typing import Dict, List, Optional, Literal
+from typing import Dict, List, Optional, Union
 from datetime import datetime
 import json
 
 
 class FocusAgent:
     """AI agent that monitors focus and provides Duolingo-style nudges."""
-    
-    VERDICT_TYPES = Literal["On Track", "Distracted", "Idle"]
     
     def __init__(self, provider: str = "openai", api_key: Optional[str] = None, 
                  base_url: Optional[str] = None, model: Optional[str] = None):
@@ -262,3 +260,112 @@ Respond in JSON format:
         except Exception as e:
             print(f"Error generating tasks: {e}")
             return []
+
+
+class MockFocusAgent(FocusAgent):
+    """Mock agent for demo mode without API keys. Returns predefined responses."""
+    
+    def __init__(self):
+        """Initialize mock agent without any API dependencies."""
+        self.provider = "mock"
+        self.last_verdict = None
+        self.idle_count = 0
+        self.distracted_count = 0
+        self.connection_healthy = True
+        self.client = None
+        self.api_key = None
+        self.check_counter = 0
+        
+        self.verdicts_cycle = ["On Track", "On Track", "Distracted", "On Track", "Idle"]
+        self.messages = {
+            "On Track": [
+                "Great work! You're making solid progress! 🎯",
+                "Keep it up! I see you're focused on the task. 💪",
+                "Looking good! You're on the right track! ✨",
+                "Nice! Your workflow is looking productive! 🚀"
+            ],
+            "Distracted": [
+                "Wait, what are you working on? That doesn't look like the task! 🤨",
+                "Hmm, spotted some wandering there. Let's refocus! 👀",
+                "Getting a bit sidetracked? Back to the task! 🎯",
+                "I see you there! Time to get back on track! 🦉"
+            ],
+            "Idle": [
+                "Files won't write themselves. *Hoot hoot.* 🦉",
+                "Hey! Time to make some progress! ⏰",
+                "No activity detected. Let's get moving! 💤",
+                "Your task is waiting! Let's code! 🔥"
+            ]
+        }
+    
+    def analyze(self, active_task: Optional[Dict], recent_activity: List[Dict]) -> Dict:
+        """Return mock analysis results."""
+        if not active_task:
+            return {
+                "verdict": "Idle",
+                "message": "No active task selected. Pick a task to get started! 🎯",
+                "reasoning": "No active task (mock mode)",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Cycle through verdicts
+        verdict = self.verdicts_cycle[self.check_counter % len(self.verdicts_cycle)]
+        self.check_counter += 1
+        
+        # Get message for this verdict
+        import random
+        message = random.choice(self.messages[verdict])
+        
+        # Track consecutive states
+        if verdict == "Idle":
+            self.idle_count += 1
+            self.distracted_count = 0
+        elif verdict == "Distracted":
+            self.distracted_count += 1
+            self.idle_count = 0
+        else:
+            self.idle_count = 0
+            self.distracted_count = 0
+        
+        self.last_verdict = verdict
+        
+        return {
+            "verdict": verdict,
+            "message": message,
+            "reasoning": f"Mock analysis for task: {active_task.get('title', 'Unknown')}",
+            "timestamp": datetime.now().isoformat(),
+            "should_alert": (self.idle_count >= 2 or self.distracted_count >= 2)
+        }
+    
+    def get_onboarding_tasks(self, project_description: str) -> List[Dict]:
+        """Generate mock tasks based on project description."""
+        # Simple keyword-based task generation
+        description_lower = project_description.lower()
+        
+        if any(word in description_lower for word in ["web", "website", "app", "frontend"]):
+            return [
+                {"title": "Set up project structure", "description": "Create folders and initial files", "estimated_duration": "15 min"},
+                {"title": "Design UI mockup", "description": "Sketch out the main interface", "estimated_duration": "20 min"},
+                {"title": "Build homepage", "description": "Create the landing page HTML/CSS", "estimated_duration": "30 min"},
+                {"title": "Add navigation", "description": "Implement menu and routing", "estimated_duration": "25 min"},
+                {"title": "Connect backend", "description": "Set up API integration", "estimated_duration": "30 min"},
+                {"title": "Test and debug", "description": "Fix bugs and test functionality", "estimated_duration": "20 min"}
+            ]
+        elif any(word in description_lower for word in ["api", "backend", "server"]):
+            return [
+                {"title": "Set up project structure", "description": "Initialize project and dependencies", "estimated_duration": "15 min"},
+                {"title": "Design database schema", "description": "Plan data models and relationships", "estimated_duration": "20 min"},
+                {"title": "Create API endpoints", "description": "Build REST routes", "estimated_duration": "30 min"},
+                {"title": "Add authentication", "description": "Implement user auth", "estimated_duration": "25 min"},
+                {"title": "Write tests", "description": "Create unit and integration tests", "estimated_duration": "30 min"}
+            ]
+        else:
+            # Generic tasks
+            return [
+                {"title": "Research and planning", "description": "Gather requirements and plan approach", "estimated_duration": "20 min"},
+                {"title": "Set up environment", "description": "Install dependencies and tools", "estimated_duration": "15 min"},
+                {"title": "Build core feature #1", "description": "Implement main functionality", "estimated_duration": "30 min"},
+                {"title": "Build core feature #2", "description": "Add secondary features", "estimated_duration": "25 min"},
+                {"title": "Testing and debugging", "description": "Test and fix issues", "estimated_duration": "20 min"},
+                {"title": "Documentation", "description": "Write README and comments", "estimated_duration": "15 min"}
+            ]

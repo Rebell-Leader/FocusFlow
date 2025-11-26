@@ -11,10 +11,19 @@ from typing import Optional, List, Dict
 from dotenv import load_dotenv
 from storage import TaskManager
 from monitor import FileMonitor
-from agent import FocusAgent
+from agent import FocusAgent, MockFocusAgent
+from metrics import MetricsTracker
 
 # Load environment variables
 load_dotenv()
+
+# Import MCP tools to register them with Gradio
+try:
+    import mcp_tools
+    MCP_AVAILABLE = True
+except Exception as e:
+    print(f"⚠️ MCP tools not available: {e}")
+    MCP_AVAILABLE = False
 
 # Configuration from environment
 LAUNCH_MODE = os.getenv("LAUNCH_MODE", "demo").lower()  # 'demo' or 'local'
@@ -24,6 +33,7 @@ MONITOR_INTERVAL = int(os.getenv("MONITOR_INTERVAL", "30"))  # seconds
 # Global state
 task_manager = TaskManager()
 file_monitor = FileMonitor()
+metrics_tracker = MetricsTracker()
 focus_agent: Optional[FocusAgent] = None
 monitoring_active = False
 timer_active = False  # Track timer state globally
@@ -32,42 +42,49 @@ demo_text_content = ""  # For demo mode text monitoring
 
 
 def initialize_agent() -> str:
-    """Initialize the AI agent with fallback to vLLM if API keys are missing."""
+    """Initialize the AI agent with fallback to Mock agent if API keys are missing."""
     global focus_agent, AI_PROVIDER
     
     try:
         provider_to_use = AI_PROVIDER
         fallback_used = False
+        use_mock = False
         
         if AI_PROVIDER == "anthropic":
             api_key = os.getenv("ANTHROPIC_API_KEY")
             if not api_key:
-                provider_to_use = "vllm"
-                fallback_used = True
+                use_mock = True
             else:
                 focus_agent = FocusAgent(provider="anthropic", api_key=api_key)
         elif AI_PROVIDER == "openai":
             api_key = os.getenv("OPENAI_API_KEY")
             if not api_key:
-                provider_to_use = "vllm"
-                fallback_used = True
+                use_mock = True
             else:
                 focus_agent = FocusAgent(provider="openai", api_key=api_key)
+        elif AI_PROVIDER == "vllm":
+            try:
+                focus_agent = FocusAgent(
+                    provider="vllm",
+                    api_key=os.getenv("VLLM_API_KEY", "EMPTY"),
+                    base_url=os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1"),
+                    model=os.getenv("VLLM_MODEL", "ibm-granite/granite-4.0-h-1b")
+                )
+                if not focus_agent.connection_healthy:
+                    use_mock = True
+            except:
+                use_mock = True
         
-        if provider_to_use == "vllm":
-            focus_agent = FocusAgent(
-                provider="vllm",
-                api_key=os.getenv("VLLM_API_KEY", "EMPTY"),
-                base_url=os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1"),
-                model=os.getenv("VLLM_MODEL", "ibm-granite/granite-4.0-h-1b")
-            )
-        
-        if fallback_used:
-            return f"⚠️ {AI_PROVIDER.upper()} API key not found. Using vLLM as fallback provider."
+        # Use mock agent if no API keys or connections available
+        if use_mock:
+            focus_agent = MockFocusAgent()
+            return f"ℹ️ Running in DEMO MODE with Mock AI (no API keys needed). Perfect for testing! 🎭"
         else:
-            return f"✅ {provider_to_use.upper()} agent initialized successfully!"
+            return f"✅ {AI_PROVIDER.upper()} agent initialized successfully!"
     except Exception as e:
-        return f"❌ Error: {str(e)}"
+        # Fall back to mock on any error
+        focus_agent = MockFocusAgent()
+        return f"ℹ️ Using Mock AI for demo (Error: {str(e)}) 🎭"
 
 
 def process_onboarding(project_description: str) -> tuple:
@@ -246,6 +263,15 @@ def run_focus_check() -> tuple:
     verdict = result.get("verdict", "Unknown")
     message = result.get("message", "No message")
     
+    # Log to metrics if we have an active task
+    if active_task:
+        metrics_tracker.log_focus_check(
+            active_task['id'],
+            active_task['title'],
+            verdict,
+            message
+        )
+    
     # Determine emoji
     emoji = "✅" if verdict == "On Track" else "⚠️" if verdict == "Distracted" else "💤"
     
@@ -278,6 +304,37 @@ def run_focus_check() -> tuple:
         """
     
     return "\n".join(activity_log), alert_js
+
+
+def refresh_dashboard() -> tuple:
+    """Refresh dashboard with latest metrics."""
+    import pandas as pd
+    
+    # Get today's stats
+    today_stats = metrics_tracker.get_today_stats()
+    current_streak = metrics_tracker.get_current_streak()
+    
+    # Prepare state distribution data
+    state_data = pd.DataFrame([
+        {"state": "On Track", "count": today_stats["on_track"]},
+        {"state": "Distracted", "count": today_stats["distracted"]},
+        {"state": "Idle", "count": today_stats["idle"]}
+    ])
+    
+    # Prepare weekly trend data
+    chart_data = metrics_tracker.get_chart_data()
+    weekly_data = pd.DataFrame({
+        "date": chart_data["dates"],
+        "score": chart_data["focus_scores"]
+    })
+    
+    return (
+        today_stats["focus_score"],
+        current_streak,
+        today_stats["total_checks"],
+        state_data,
+        weekly_data
+    )
 
 
 # New UI for FocusFlow - Complete Redesign
@@ -409,7 +466,43 @@ with gr.Blocks(title="FocusFlow AI") as app:
                     form_save_btn = gr.Button("💾 Save", variant="primary", size="sm", scale=1)
                     form_cancel_btn = gr.Button("❌ Cancel", variant="secondary", size="sm", scale=1)
         
-        # Tab 4: Monitor
+        # Tab 4: Dashboard
+        with gr.Tab("📊 Dashboard"):
+            gr.Markdown("## 📊 Productivity Dashboard")
+            
+            # Today's stats
+            with gr.Row():
+                with gr.Column(scale=1):
+                    today_focus_score = gr.Number(label="Focus Score", value=0, interactive=False)
+                with gr.Column(scale=1):
+                    today_streak = gr.Number(label="Current Streak 🔥", value=0, interactive=False)
+                with gr.Column(scale=1):
+                    today_checks = gr.Number(label="Total Checks", value=0, interactive=False)
+            
+            # State distribution (today)
+            gr.Markdown("### Today's Focus Distribution")
+            import pandas as pd
+            empty_state_df = pd.DataFrame([{"state": "On Track", "count": 0}, {"state": "Distracted", "count": 0}, {"state": "Idle", "count": 0}])
+            state_plot = gr.BarPlot(
+                value=empty_state_df,
+                x="state",
+                y="count",
+                title="Focus States Distribution"
+            )
+            
+            # Weekly focus score trend
+            gr.Markdown("### Weekly Focus Score Trend")
+            empty_weekly_df = pd.DataFrame({"date": [], "score": []})
+            weekly_plot = gr.LinePlot(
+                value=empty_weekly_df,
+                x="date",
+                y="score",
+                title="Focus Score (Last 7 Days)"
+            )
+            
+            refresh_dashboard_btn = gr.Button("🔄 Refresh Dashboard", variant="secondary")
+        
+        # Tab 5: Monitor
         with gr.Tab("👁️ Monitor"):
             gr.Markdown("## Focus Monitoring")
             
@@ -948,6 +1041,18 @@ with gr.Blocks(title="FocusFlow AI") as app:
         outputs=[timer, timer_toggle_btn]
     )
     
+    # Dashboard handlers
+    refresh_dashboard_btn.click(
+        fn=refresh_dashboard,
+        outputs=[today_focus_score, today_streak, today_checks, state_plot, weekly_plot]
+    )
+    
+    # Auto-refresh dashboard on load
+    app.load(
+        fn=refresh_dashboard,
+        outputs=[today_focus_score, today_streak, today_checks, state_plot, weekly_plot]
+    )
+    
     # Set timer active in demo mode on load
     if LAUNCH_MODE == "demo":
         def activate_timer_demo():
@@ -975,4 +1080,12 @@ with gr.Blocks(title="FocusFlow AI") as app:
 
 
 if __name__ == "__main__":
-    app.launch(server_name="0.0.0.0", server_port=5000, share=False)
+    # Enable MCP server if available
+    mcp_enabled = os.getenv("ENABLE_MCP", "true").lower() == "true"
+    
+    if MCP_AVAILABLE and mcp_enabled:
+        print("🔗 MCP Server enabled! Connect via Claude Desktop or other MCP clients.")
+        app.launch(server_name="0.0.0.0", server_port=5000, share=False, mcp_server=True)
+    else:
+        print("📱 Running without MCP integration")
+        app.launch(server_name="0.0.0.0", server_port=5000, share=False)
