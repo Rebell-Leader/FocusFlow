@@ -168,20 +168,169 @@ In Claude Desktop, try:
 "Show me my productivity stats"
 ```
 
-## ⚙️ Configuration
+## 🆕 Recent Updates
 
-All configuration is via environment variables:
+### Version 1.0 (Hackathon Release)
+- ✅ **MCP Integration** - Full Model Context Protocol support with 8 tools and 3 resources
+- ✅ **Demo API Keys** - Support for `DEMO_ANTHROPIC_API_KEY` and `DEMO_OPENAI_API_KEY` for hackathon deployments
+- ✅ **Productivity Dashboard** - Focus scores, streaks, weekly trends, and state distribution charts
+- ✅ **Mock AI Mode** - Works without API keys for testing and demos
+- ✅ **Graceful Degradation** - Automatically falls back to Mock AI if API keys are invalid or out of credits
+- ✅ **Dual Launch Modes** - Demo mode (text area) and Local mode (file monitoring)
+- ✅ **Comprehensive Testing** - Full testing checklist in `TESTING_CHECKLIST.md`
+- ✅ **Error Handling** - Invalid task IDs return helpful error messages in MCP tools
+- ✅ **Metrics Integration** - MCP `get_productivity_stats()` includes focus scores and streaks
 
+## ⚙️ Configuration & Environment Variables
+
+### Core Settings
+
+| Variable | Default | Options | Description |
+|----------|---------|---------|-------------|
+| `LAUNCH_MODE` | `demo` | `demo`, `local` | Workspace monitoring mode (see Launch Modes below) |
+| `AI_PROVIDER` | `anthropic` | `openai`, `anthropic`, `vllm`, `mock` | AI provider to use |
+| `MONITOR_INTERVAL` | `30` | Any integer | Seconds between automatic focus checks |
+| `ENABLE_MCP` | `true` | `true`, `false` | Enable/disable MCP server |
+
+### AI Provider API Keys
+
+**Priority Order:** Demo keys are checked first, then user keys, then falls back to Mock AI.
+
+#### User API Keys
+| Variable | Description | Get Key From |
+|----------|-------------|--------------|
+| `OPENAI_API_KEY` | Your personal OpenAI API key | https://platform.openai.com/api-keys |
+| `ANTHROPIC_API_KEY` | Your personal Anthropic API key | https://console.anthropic.com/ |
+
+#### Demo API Keys (For Hackathon Organizers)
+| Variable | Description | Use Case |
+|----------|-------------|----------|
+| `DEMO_ANTHROPIC_API_KEY` | Shared Anthropic key for demos | Set on HuggingFace Spaces for judges/testers |
+| `DEMO_OPENAI_API_KEY` | Shared OpenAI key for demos | Set on HuggingFace Spaces for judges/testers |
+
+**How It Works:**
+```python
+# Priority chain (Anthropic example):
+1. Check DEMO_ANTHROPIC_API_KEY (hackathon demo key)
+2. If not found, check ANTHROPIC_API_KEY (user's personal key)
+3. If not found or invalid, fall back to Mock AI (no errors!)
+```
+
+#### vLLM Settings (Local Inference)
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LAUNCH_MODE` | `demo` | `demo` (text area) or `local` (file monitoring) |
-| `AI_PROVIDER` | `openai` | `openai`, `anthropic`, `vllm`, or `mock` |
-| `MONITOR_INTERVAL` | `30` | Seconds between focus checks |
-| `ENABLE_MCP` | `true` | Enable/disable MCP server |
-| `OPENAI_API_KEY` | - | OpenAI API key (if using OpenAI) |
-| `ANTHROPIC_API_KEY` | - | Anthropic API key (if using Claude) |
-| `VLLM_BASE_URL` | `http://localhost:8000/v1` | vLLM server URL |
-| `VLLM_MODEL` | `ibm-granite/granite-4.0-h-1b` | vLLM model name |
+| `VLLM_BASE_URL` | `http://localhost:8000/v1` | vLLM server endpoint |
+| `VLLM_MODEL` | `ibm-granite/granite-4.0-h-1b` | Model name |
+| `VLLM_API_KEY` | `EMPTY` | API key (usually not needed for local) |
+
+### API Key Management Best Practices
+
+**For Local Development:**
+```bash
+# Copy the example file
+cp .env.example .env
+
+# Edit .env and add your personal keys
+nano .env  # or your preferred editor
+```
+
+**For HuggingFace Spaces Deployment:**
+```bash
+# In Space Settings > Variables, add:
+LAUNCH_MODE=demo
+AI_PROVIDER=anthropic
+DEMO_ANTHROPIC_API_KEY=sk-ant-your-hackathon-key
+```
+
+**For Testing Without API Keys:**
+```bash
+# Just run - Mock AI activates automatically!
+python app.py
+# Status: "ℹ️ Running in DEMO MODE with Mock AI (no API keys needed). Perfect for testing! 🎭"
+```
+
+### Graceful Degradation
+
+FocusFlow **never crashes** due to missing or invalid API keys:
+
+| Scenario | Behavior | User Experience |
+|----------|----------|-----------------|
+| No API keys set | Uses Mock AI | ✅ Full demo functionality |
+| Invalid API key | Falls back to Mock AI | ✅ App continues working |
+| API out of credits | Falls back to Mock AI | ✅ Seamless transition |
+| API rate limited | Retries, then Mock AI | ✅ No interruption |
+
+**Status Messages:**
+- `✅ Anthropic Claude initialized successfully (demo key)` - Demo key working
+- `✅ OpenAI GPT-4 initialized successfully (user key)` - User key working
+- `ℹ️ Running in DEMO MODE with Mock AI (no API keys needed)` - Fallback active
+
+## 🎮 Launch Modes Explained
+
+FocusFlow supports two workspace monitoring modes:
+
+### Demo Mode (`LAUNCH_MODE=demo`)
+
+**Best for:**
+- HuggingFace Spaces deployments
+- Replit deployments
+- Testing without file system access
+- Hackathon demos for judges
+
+**How it works:**
+- Provides a text area for simulating workspace activity
+- Users type what they're working on
+- AI analyzes text content for focus checks
+- No file system permissions needed
+
+**Example:**
+```bash
+export LAUNCH_MODE=demo
+python app.py
+# Monitor tab shows: "Demo Workspace" text area
+```
+
+**User Workflow:**
+1. Type: "Working on authentication API, creating login endpoint"
+2. Click "Check Focus Now"
+3. Result: "On Track! Great work! 🎯"
+
+### Local Mode (`LAUNCH_MODE=local`)
+
+**Best for:**
+- Local development environments
+- Real-time file monitoring
+- Production use cases
+- Personal productivity tracking
+
+**How it works:**
+- Uses `watchdog` library to monitor file system changes
+- Automatically detects file modifications in project directory
+- Reads actual file diffs for intelligent analysis
+- Triggers focus checks automatically when files change
+
+**Example:**
+```bash
+export LAUNCH_MODE=local
+python app.py
+# Monitor tab shows: "Watching directory: /your/project/path"
+```
+
+**User Workflow:**
+1. Start a task in Task Manager
+2. Edit files in your project
+3. FocusFlow automatically detects changes and runs focus checks
+4. Receive real-time feedback
+
+### Choosing the Right Mode
+
+| Use Case | Recommended Mode | Reason |
+|----------|------------------|--------|
+| HuggingFace Spaces | `demo` | No file system access in web deployments |
+| Hackathon demo | `demo` | Easy for judges to test without setup |
+| Local development | `local` | Real-time file monitoring is more natural |
+| Replit | `demo` | Simpler, no file permissions issues |
+| Personal productivity | `local` | Authentic workspace monitoring |
 
 ## 📁 Project Structure
 
@@ -224,26 +373,270 @@ Real-time focus checks with Duolingo-style feedback.
 5. **Demo-Friendly**: Works without API keys, deployable to HF Spaces
 6. **Production-Ready**: SQLite persistence, metrics tracking, error handling
 
+## 🧪 Testing
+
+### Quick Feature Test (5 minutes)
+
+Use the comprehensive **`TESTING_CHECKLIST.md`** file for detailed testing instructions. Here's a quick verification:
+
+```bash
+# 1. Start the app
+python app.py
+
+# 2. Open browser
+open http://localhost:5000
+
+# 3. Test each tab:
+# ✅ Home: Check status message shows AI provider
+# ✅ Onboarding: Generate tasks from project description
+# ✅ Task Manager: Create/edit/delete/start tasks
+# ✅ Monitor: Perform focus checks (demo workspace or file changes)
+# ✅ Dashboard: View metrics after focus checks
+# ✅ Pomodoro: Start/pause/reset timer
+```
+
+### Test Scenarios
+
+**Scenario 1: Demo Mode (No API Keys)**
+```bash
+# No .env file needed
+python app.py
+# Expected: "ℹ️ Running in DEMO MODE with Mock AI"
+# Test: All features work with predefined responses
+```
+
+**Scenario 2: With Anthropic API Key**
+```bash
+export AI_PROVIDER=anthropic
+export ANTHROPIC_API_KEY=sk-ant-your-key
+python app.py
+# Expected: "✅ Anthropic Claude initialized successfully (user key)"
+# Test: Intelligent task generation and focus analysis
+```
+
+**Scenario 3: Demo Key (Hackathon Deployment)**
+```bash
+export AI_PROVIDER=anthropic
+export DEMO_ANTHROPIC_API_KEY=sk-ant-demo-key
+python app.py
+# Expected: "✅ Anthropic Claude initialized successfully (demo key)"
+# Test: Uses demo key, falls back to Mock if exhausted
+```
+
+**Scenario 4: MCP Integration**
+```bash
+# 1. Configure Claude Desktop (see MCP section above)
+# 2. Start FocusFlow
+python app.py
+# 3. In Claude Desktop, test tools:
+#    - "Add a task to implement OAuth2"
+#    - "What's my current task?"
+#    - "Show my productivity stats"
+```
+
+### Automated Testing
+
+Run the full test suite:
+```bash
+# Follow TESTING_CHECKLIST.md step-by-step
+# Expected: All features pass without errors
+# Time: ~15 minutes for comprehensive test
+```
+
+### Common Issues & Solutions
+
+| Issue | Solution |
+|-------|----------|
+| "No API key" error | Set `AI_PROVIDER=mock` or leave keys empty - Mock AI activates automatically |
+| Charts show "Infinite extent" warning | Normal on first load with no data - warnings disappear after focus checks |
+| MCP tools not visible in Claude | Restart Claude Desktop after config changes |
+| File monitoring not working | Check `LAUNCH_MODE=local` and file permissions |
+| Tasks not persisting | Check `focusflow.db` file exists and is writable |
+
 ## 🚀 Deployment
 
-### HuggingFace Spaces
+### Deployment Option 1: HuggingFace Spaces (Recommended for Hackathon)
 
-1. Create a new Gradio Space
-2. Upload all files
-3. Set environment variables in Space settings:
-   ```
-   LAUNCH_MODE=demo
-   AI_PROVIDER=openai
-   OPENAI_API_KEY=your_key_here
-   ```
-4. Done! Your MCP server will be accessible at `https://yourspace.hf.space/gradio_api/mcp/`
+**Step 1: Create Space**
+1. Go to https://huggingface.co/spaces
+2. Click "Create new Space"
+3. Select "Gradio" as SDK
+4. Choose a name (e.g., `focusflow-demo`)
 
-### Replit
+**Step 2: Upload Files**
+Upload these files to your Space:
+- `app.py`
+- `agent.py`
+- `storage.py`
+- `monitor.py`
+- `metrics.py`
+- `mcp_tools.py`
+- `requirements.txt`
+- `README.md`
+- `.env.example` (optional, for documentation)
 
-1. Import this repository
-2. Set secrets in Replit Secrets
-3. Run `python app.py`
-4. Share the Replit URL
+**Step 3: Configure Environment Variables**
+
+In Space Settings → Variables, add:
+
+**Option A: With Demo AI (Recommended for Judges)**
+```bash
+LAUNCH_MODE=demo
+AI_PROVIDER=anthropic
+DEMO_ANTHROPIC_API_KEY=sk-ant-your-hackathon-shared-key
+MONITOR_INTERVAL=30
+ENABLE_MCP=true
+```
+
+**Option B: Mock AI Only (No API Keys Needed)**
+```bash
+LAUNCH_MODE=demo
+AI_PROVIDER=mock
+MONITOR_INTERVAL=30
+ENABLE_MCP=true
+```
+
+**Step 4: Deploy**
+- Click "Save" - Space will automatically rebuild and deploy
+- Your app will be live at: `https://huggingface.co/spaces/yourusername/focusflow-demo`
+- MCP server endpoint: `https://yourusername-focusflow-demo.hf.space/gradio_api/mcp/`
+
+**Step 5: Test Deployment**
+1. Open the Space URL
+2. Test onboarding → Generate tasks
+3. Test task manager → CRUD operations
+4. Test monitor → Focus checks
+5. Test dashboard → View metrics
+6. Test MCP (optional) → Connect from Claude Desktop
+
+### Deployment Option 2: Replit
+
+**Step 1: Import Repository**
+1. Go to https://replit.com
+2. Click "Create Repl" → "Import from GitHub"
+3. Paste your FocusFlow repository URL
+
+**Step 2: Configure Secrets**
+In Replit Secrets (Tools → Secrets):
+```bash
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=your_key_here
+LAUNCH_MODE=demo
+```
+
+**Step 3: Run**
+```bash
+python app.py
+```
+
+**Step 4: Share**
+- Click "Share" button
+- Copy the public URL
+- MCP endpoint: `https://yourrepl.repl.co/gradio_api/mcp/`
+
+### Deployment Option 3: Local Development
+
+**Step 1: Clone Repository**
+```bash
+git clone https://github.com/yourusername/focusflow.git
+cd focusflow
+```
+
+**Step 2: Install Dependencies**
+```bash
+pip install -r requirements.txt
+```
+
+**Step 3: Configure Environment**
+```bash
+# Copy example
+cp .env.example .env
+
+# Edit .env with your settings
+nano .env  # or code .env, vim .env, etc.
+```
+
+**Step 4: Run**
+```bash
+# For local file monitoring
+export LAUNCH_MODE=local
+python app.py
+
+# For demo mode (text area)
+export LAUNCH_MODE=demo
+python app.py
+```
+
+**Step 5: Access**
+- Web UI: http://localhost:5000
+- MCP endpoint: http://localhost:5000/gradio_api/mcp/
+
+### Deployment Option 4: Docker (Advanced)
+
+Create `Dockerfile`:
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+ENV LAUNCH_MODE=demo
+ENV AI_PROVIDER=mock
+ENV ENABLE_MCP=true
+
+EXPOSE 5000
+
+CMD ["python", "app.py"]
+```
+
+Build and run:
+```bash
+docker build -t focusflow .
+docker run -p 5000:5000 -e ANTHROPIC_API_KEY=your_key focusflow
+```
+
+### Post-Deployment Checklist
+
+After deploying to any platform:
+
+- [ ] App loads without errors
+- [ ] Home tab shows correct AI provider status
+- [ ] Onboarding generates tasks
+- [ ] Task Manager CRUD operations work
+- [ ] Monitor tab performs focus checks
+- [ ] Dashboard displays metrics (after checks)
+- [ ] Pomodoro timer functions
+- [ ] MCP endpoint accessible (optional)
+- [ ] No sensitive data exposed in logs
+- [ ] Database file (`focusflow.db`) created successfully
+
+### Environment Variables Reference (Deployment)
+
+**Required:**
+- `LAUNCH_MODE` - Always set to `demo` for web deployments
+
+**Optional:**
+- `AI_PROVIDER` - `anthropic`, `openai`, `vllm`, or `mock` (default: `anthropic`)
+- `DEMO_ANTHROPIC_API_KEY` - For hackathon/shared deployments
+- `DEMO_OPENAI_API_KEY` - Alternative demo provider
+- `ANTHROPIC_API_KEY` - User's personal key
+- `OPENAI_API_KEY` - User's personal key
+- `MONITOR_INTERVAL` - Seconds between checks (default: 30)
+- `ENABLE_MCP` - Enable MCP server (default: true)
+
+### Deployment Troubleshooting
+
+| Issue | Platform | Solution |
+|-------|----------|----------|
+| Import errors | HF Spaces | Check `requirements.txt` includes all dependencies |
+| "Port already in use" | Local | Change port in `app.py` or kill process using port 5000 |
+| MCP not accessible | All | Ensure `ENABLE_MCP=true` and check firewall settings |
+| Database errors | HF Spaces | Ensure space has write permissions (SQLite needs filesystem) |
+| Mock AI always active | All | Check environment variables are set correctly |
+| Slow performance | HF Spaces | Free tier has limited resources - consider upgrading |
 
 ## 🛠️ Tech Stack
 
