@@ -462,6 +462,12 @@ def run_focus_check() -> tuple:
     return "\n".join(activity_log), alert_js, voice_audio
 
 
+def tick_and_display_pomodoro() -> str:
+    """Tick the timer and return updated display. Defined at top-level for timer scope."""
+    tick_pomodoro()
+    return update_pomodoro_display()
+
+
 def refresh_dashboard() -> tuple:
     """Refresh dashboard with latest metrics."""
     import pandas as pd
@@ -710,92 +716,17 @@ with gr.Blocks(title="FocusFlow AI") as app:
             
             # Pomodoro Timer
             gr.Markdown("### 🍅 Pomodoro Timer")
+            
+            # Timer display with embedded audio alerts
             with gr.Row():
-                pomodoro_display = gr.HTML(value="""
-                <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; margin-bottom: 10px;">
-                    <div id="pomodoro-time" style="font-size: 48px; font-weight: bold; color: white; font-family: monospace;">25:00</div>
-                    <div id="pomodoro-status" style="font-size: 16px; color: #f0f0f0; margin-top: 5px;">Work Time</div>
-                </div>
+                pomodoro_display = gr.Markdown(value=update_pomodoro_display(), elem_id="pomodoro-display")
+                gr.HTML("""
                 <audio id="pomodoro-alert" preload="auto">
                     <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTUI" type="audio/wav">
                 </audio>
                 <audio id="nudge-alert" preload="auto">
                     <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTUI" type="audio/wav">
                 </audio>
-                <script>
-                let pomodoroState = {
-                    minutes: 25,
-                    seconds: 0,
-                    isRunning: false,
-                    isWorkTime: true,
-                    interval: null
-                };
-                
-                function formatTime(mins, secs) {
-                    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-                }
-                
-                function updateDisplay() {
-                    const display = document.getElementById('pomodoro-time');
-                    const status = document.getElementById('pomodoro-status');
-                    if (display) {
-                        display.textContent = formatTime(pomodoroState.minutes, pomodoroState.seconds);
-                        status.textContent = pomodoroState.isWorkTime ? 'Work Time' : 'Break Time';
-                    }
-                }
-                
-                function playAlert() {
-                    const audio = document.getElementById('pomodoro-alert');
-                    if (audio) {
-                        audio.play().catch(e => console.log('Audio play failed:', e));
-                    }
-                    if (Notification.permission === "granted") {
-                        new Notification("Pomodoro Timer", {
-                            body: pomodoroState.isWorkTime ? "Work session complete! Take a break." : "Break is over! Ready to work?",
-                            icon: "https://em-content.zobj.net/thumbs/160/apple/354/tomato_1f345.png"
-                        });
-                    }
-                }
-                
-                function tick() {
-                    if (pomodoroState.seconds === 0) {
-                        if (pomodoroState.minutes === 0) {
-                            playAlert();
-                            pomodoroState.isWorkTime = !pomodoroState.isWorkTime;
-                            pomodoroState.minutes = pomodoroState.isWorkTime ? 25 : 5;
-                            pomodoroState.seconds = 0;
-                        } else {
-                            pomodoroState.minutes--;
-                            pomodoroState.seconds = 59;
-                        }
-                    } else {
-                        pomodoroState.seconds--;
-                    }
-                    updateDisplay();
-                }
-                
-                function startPomodoro() {
-                    if (!pomodoroState.isRunning) {
-                        pomodoroState.isRunning = true;
-                        pomodoroState.interval = setInterval(tick, 1000);
-                    }
-                }
-                
-                function stopPomodoro() {
-                    if (pomodoroState.isRunning) {
-                        pomodoroState.isRunning = false;
-                        clearInterval(pomodoroState.interval);
-                    }
-                }
-                
-                function resetPomodoro() {
-                    stopPomodoro();
-                    pomodoroState.minutes = 25;
-                    pomodoroState.seconds = 0;
-                    pomodoroState.isWorkTime = true;
-                    updateDisplay();
-                }
-                </script>
                 """)
             
             with gr.Row():
@@ -803,10 +734,22 @@ with gr.Blocks(title="FocusFlow AI") as app:
                 pomodoro_stop_btn = gr.Button("⏸️ Pause", size="sm", scale=1)
                 pomodoro_reset_btn = gr.Button("🔄 Reset", size="sm", scale=1)
             
-            # Wire up Pomodoro button handlers
-            pomodoro_start_btn.click(fn=None, js="() => { startPomodoro(); }")
-            pomodoro_stop_btn.click(fn=None, js="() => { stopPomodoro(); }")
-            pomodoro_reset_btn.click(fn=None, js="() => { resetPomodoro(); }")
+            # Wire up Pomodoro button handlers to Python functions
+            pomodoro_start_btn.click(
+                fn=pomodoro_start,
+                outputs=pomodoro_display
+            )
+            pomodoro_stop_btn.click(
+                fn=pomodoro_pause,
+                outputs=pomodoro_display
+            )
+            pomodoro_reset_btn.click(
+                fn=pomodoro_reset,
+                outputs=pomodoro_display
+            )
+            
+            # Pomodoro timer tick on auto-refresh (every interval)
+            timer.tick(fn=tick_and_display_pomodoro, outputs=pomodoro_display)
             
             # Focus log (common for both modes)
             gr.Markdown("### 🦉 Focus Agent Log")
