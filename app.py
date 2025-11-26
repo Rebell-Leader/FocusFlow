@@ -43,6 +43,15 @@ consecutive_distracted = 0  # Track distraction escalation
 activity_log: List[str] = []
 demo_text_content = ""  # For demo mode text monitoring
 
+# Pomodoro Timer State
+pomodoro_state = {
+    "minutes": 25,
+    "seconds": 0,
+    "is_running": False,
+    "is_work_time": True,
+    "total_seconds": 25 * 60
+}
+
 
 def get_voice_status_ui() -> str:
     """Get voice integration status for UI display."""
@@ -272,6 +281,74 @@ def update_demo_text(text: str) -> str:
     global demo_text_content
     demo_text_content = text
     return f"✅ Text updated ({len(text)} characters)"
+
+
+def format_time(total_seconds: int) -> str:
+    """Format seconds to MM:SS format."""
+    mins = total_seconds // 60
+    secs = total_seconds % 60
+    return f"{mins:02d}:{secs:02d}"
+
+
+def update_pomodoro_display() -> tuple:
+    """Get current Pomodoro display and status."""
+    time_str = format_time(pomodoro_state["total_seconds"])
+    status_str = "Work Time ⏰" if pomodoro_state["is_work_time"] else "Break Time ☕"
+    running_indicator = " (Running)" if pomodoro_state["is_running"] else ""
+    return f"**{time_str}** {status_str}{running_indicator}"
+
+
+def pomodoro_start() -> str:
+    """Start the Pomodoro timer."""
+    global pomodoro_state
+    pomodoro_state["is_running"] = True
+    return f"▶️ Timer started! {update_pomodoro_display()}"
+
+
+def pomodoro_pause() -> str:
+    """Pause the Pomodoro timer."""
+    global pomodoro_state
+    pomodoro_state["is_running"] = False
+    return f"⏸️ Timer paused. {update_pomodoro_display()}"
+
+
+def pomodoro_reset() -> str:
+    """Reset the Pomodoro timer."""
+    global pomodoro_state
+    pomodoro_state["is_running"] = False
+    pomodoro_state["total_seconds"] = 25 * 60
+    pomodoro_state["minutes"] = 25
+    pomodoro_state["seconds"] = 0
+    pomodoro_state["is_work_time"] = True
+    return f"🔄 Timer reset. {update_pomodoro_display()}"
+
+
+def tick_pomodoro() -> str:
+    """Tick the Pomodoro timer (called frequently)."""
+    global pomodoro_state
+    
+    if not pomodoro_state["is_running"]:
+        return update_pomodoro_display()
+    
+    # Decrement timer
+    pomodoro_state["total_seconds"] -= 1
+    
+    # Check if session complete
+    if pomodoro_state["total_seconds"] <= 0:
+        # Switch between work and break
+        pomodoro_state["is_work_time"] = not pomodoro_state["is_work_time"]
+        pomodoro_state["total_seconds"] = (25 * 60) if pomodoro_state["is_work_time"] else (5 * 60)
+        pomodoro_state["is_running"] = False  # Auto-pause to get attention
+        
+        # Try to play alert sound
+        try:
+            audio = document.getElementById('pomodoro-alert')
+            if audio:
+                audio.play()
+        except:
+            pass
+    
+    return update_pomodoro_display()
 
 
 def get_activity_summary() -> str:
