@@ -42,26 +42,43 @@ demo_text_content = ""  # For demo mode text monitoring
 
 
 def initialize_agent() -> str:
-    """Initialize the AI agent with fallback to Mock agent if API keys are missing."""
+    """
+    Initialize the AI agent with fallback to Mock agent if API keys are missing.
+    Supports DEMO_* API keys for hackathon deployments (checked first).
+    """
     global focus_agent, AI_PROVIDER
     
     try:
-        provider_to_use = AI_PROVIDER
-        fallback_used = False
         use_mock = False
         
         if AI_PROVIDER == "anthropic":
-            api_key = os.getenv("ANTHROPIC_API_KEY")
+            # Check for demo key first (for hackathon HF Spaces), then user key
+            api_key = os.getenv("DEMO_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
             if not api_key:
                 use_mock = True
             else:
-                focus_agent = FocusAgent(provider="anthropic", api_key=api_key)
+                try:
+                    focus_agent = FocusAgent(provider="anthropic", api_key=api_key)
+                    key_type = "demo" if os.getenv("DEMO_ANTHROPIC_API_KEY") else "user"
+                    return f"✅ Anthropic Claude initialized successfully ({key_type} key)"
+                except Exception as e:
+                    print(f"⚠️ Anthropic API error: {e}")
+                    use_mock = True
+        
         elif AI_PROVIDER == "openai":
-            api_key = os.getenv("OPENAI_API_KEY")
+            # Check for demo key first, then user key
+            api_key = os.getenv("DEMO_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
             if not api_key:
                 use_mock = True
             else:
-                focus_agent = FocusAgent(provider="openai", api_key=api_key)
+                try:
+                    focus_agent = FocusAgent(provider="openai", api_key=api_key)
+                    key_type = "demo" if os.getenv("DEMO_OPENAI_API_KEY") else "user"
+                    return f"✅ OpenAI GPT-4 initialized successfully ({key_type} key)"
+                except Exception as e:
+                    print(f"⚠️ OpenAI API error: {e}")
+                    use_mock = True
+        
         elif AI_PROVIDER == "vllm":
             try:
                 focus_agent = FocusAgent(
@@ -72,15 +89,17 @@ def initialize_agent() -> str:
                 )
                 if not focus_agent.connection_healthy:
                     use_mock = True
-            except:
+                else:
+                    return f"✅ vLLM initialized successfully!"
+            except Exception as e:
+                print(f"⚠️ vLLM error: {e}")
                 use_mock = True
         
         # Use mock agent if no API keys or connections available
         if use_mock:
             focus_agent = MockFocusAgent()
             return f"ℹ️ Running in DEMO MODE with Mock AI (no API keys needed). Perfect for testing! 🎭"
-        else:
-            return f"✅ {AI_PROVIDER.upper()} agent initialized successfully!"
+        
     except Exception as e:
         # Fall back to mock on any error
         focus_agent = MockFocusAgent()

@@ -110,6 +110,17 @@ python app.py
 
 **No API keys? No problem!** FocusFlow automatically uses a **Mock AI** agent with predefined responses for testing.
 
+### For Hackathon Organizers (HuggingFace Spaces)
+
+To enable AI features on demo deployments, set **demo API keys** as environment variables:
+
+```bash
+DEMO_ANTHROPIC_API_KEY=sk-ant-xxx  # Checked first, falls back to user keys
+DEMO_OPENAI_API_KEY=sk-xxx         # Same fallback logic
+```
+
+If demo keys run out of credits, FocusFlow gracefully falls back to Mock AI mode automatically.
+
 ## 🔌 Connecting to Claude Desktop (MCP)
 
 ### Step 1: Start FocusFlow
