@@ -283,6 +283,21 @@ def update_demo_text(text: str) -> str:
     return f"✅ Text updated ({len(text)} characters)"
 
 
+def set_check_interval(frequency_label: str) -> str:
+    """Update check interval based on dropdown selection."""
+    global check_interval, MONITOR_INTERVAL
+    
+    frequency_map = {
+        "30 seconds": 30,
+        "1 minute": 60,
+        "5 minutes": 300,
+        "10 minutes": 600,
+    }
+    
+    check_interval = frequency_map.get(frequency_label, MONITOR_INTERVAL)
+    return f"✅ Check interval set to {frequency_label}"
+
+
 def format_time(total_seconds: int) -> str:
     """Format seconds to MM:SS format."""
     mins = total_seconds // 60
