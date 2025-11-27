@@ -9,3 +9,5 @@ python-dotenv>=1.0.0
 elevenlabs>=1.0.0
 linear>=0.1.0
 requests>=2.31.0
+pytest
+sseclient-py
