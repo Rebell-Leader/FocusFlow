@@ -74,8 +74,8 @@ Connect FocusFlow to Claude Desktop, Cursor, or any MCP-compatible client!
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/focusflow.git
-cd focusflow
+git clone https://github.com/Rebell-Leader/FocusFlow.git
+cd FocusFlow
 
 # Install dependencies
 pip install -r requirements.txt
@@ -139,6 +139,38 @@ You'll see:
 🔗 MCP Server enabled! Connect via Claude Desktop or other MCP clients.
 * Streamable HTTP URL: http://localhost:5000/gradio_api/mcp/
 ```
+
+### 🔌 Connecting via MCP (Claude Desktop / Windows)
+
+FocusFlow runs an MCP server that you can connect to from external tools like Claude Desktop or LM Studio.
+
+**If running on WSL and connecting from Windows:**
+
+1.  **Ensure the app is running**: `python app.py` (it listens on `0.0.0.0` by default).
+2.  **Find your WSL IP address**: Run `wsl hostname -I` in your terminal.
+3.  **Configure your MCP Client**:
+    *   **Type**: SSE (Server-Sent Events)
+    *   **URL**: `http://<YOUR_WSL_IP>:5000/gradio_api/mcp/sse`
+    *   *(Or try `http://localhost:5000/gradio_api/mcp/sse` if localhost forwarding is working)*
+
+**Available MCP Tools:**
+*   `get_active_task`: Get the currently active task.
+*   `add_task`: Create a new task.
+*   `update_task`: Update task status or details.
+*   `get_productivity_stats`: Get focus scores and metrics.
+
+**Configuration (mcp.json / claude_desktop_config.json):**
+
+```json
+{
+  "mcpServers": {
+    "focusflow": {
+      "url": "http://<YOUR_WSL_IP>:5000/gradio_api/mcp/sse"
+    }
+  }
+}
+```
+*Replace `<YOUR_WSL_IP>` with the IP address from step 2 (e.g., `172.x.x.x`).*
 
 ### Step 2: Configure Claude Desktop
 
@@ -208,6 +240,7 @@ In Claude Desktop, try:
 | `OPENAI_API_KEY` | Your personal OpenAI API key | https://platform.openai.com/api-keys |
 | `ANTHROPIC_API_KEY` | Your personal Anthropic API key | https://console.anthropic.com/ |
 | `ELEVEN_API_KEY` | Your personal ElevenLabs API key (optional) | https://elevenlabs.io/api |
+| `LINEAR_API_KEY` | Your personal Linear API key (optional) | https://linear.app/settings/api |
 
 #### Demo API Keys (For Hackathon Organizers)
 | Variable | Description | Use Case |

@@ -9,8 +9,8 @@ import json
 
 class FocusAgent:
     """AI agent that monitors focus and provides Duolingo-style nudges."""
-    
-    def __init__(self, provider: str = "openai", api_key: Optional[str] = None, 
+
+    def __init__(self, provider: str = "openai", api_key: Optional[str] = None,
                  base_url: Optional[str] = None, model: Optional[str] = None):
         """Initialize the focus agent with AI provider."""
         self.provider = provider.lower()
@@ -18,7 +18,7 @@ class FocusAgent:
         self.idle_count = 0
         self.distracted_count = 0
         self.connection_healthy = False
-        
+
         if self.provider == "openai":
             from openai import OpenAI
             self.api_key = api_key or os.getenv("OPENAI_API_KEY")
@@ -29,7 +29,7 @@ class FocusAgent:
             from anthropic import Anthropic
             self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
             self.client = Anthropic(api_key=self.api_key) if self.api_key else None
-            self.model = model or "claude-3-5-sonnet-20241022"
+            self.model = model or "claude-haiku-4-5-20251001"
             self.connection_healthy = bool(self.api_key)
         elif self.provider == "gemini":
             import google.generativeai as genai
@@ -48,7 +48,7 @@ class FocusAgent:
             self.api_key = api_key or os.getenv("VLLM_API_KEY", "EMPTY")
             self.base_url = base_url or os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1")
             self.model = model or os.getenv("VLLM_MODEL", "ibm-granite/granite-4.0-h-1b")
-            
+
             try:
                 timeout = httpx.Timeout(5.0, connect=2.0)
                 self.client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=timeout)
@@ -61,7 +61,7 @@ class FocusAgent:
                 self.connection_healthy = False
         else:
             raise ValueError(f"Unsupported provider: {provider}. Supported: openai, anthropic, gemini, vllm")
-    
+
     def _create_analysis_prompt(self, active_task: Dict, recent_activity: List[Dict]) -> str:
         """Create the analysis prompt for the LLM."""
         if not recent_activity:
@@ -84,15 +84,15 @@ Respond in JSON format:
   "message": "Your encouraging/sassy/nudging message (1-2 sentences, Duolingo style)",
   "reasoning": "Brief explanation of your analysis"
 }}"""
-        
+
         activity_summary = []
         for event in recent_activity[-5:]:
             activity_summary.append(
                 f"- {event['type'].upper()}: {event['filename']}\n  Content: {event.get('content', 'N/A')[:200]}"
             )
-        
+
         activity_text = "\n".join(activity_summary)
-        
+
         return f"""You are FocusFlow, a Duolingo-style accountability buddy for developers.
 
 **Current Task:**
@@ -115,7 +115,7 @@ Respond in JSON format:
   "message": "Your message (1-2 sentences)",
   "reasoning": "Brief explanation"
 }}"""
-    
+
     def _call_llm(self, prompt: str) -> Dict:
         """Call the LLM and parse the response."""
         try:
@@ -150,20 +150,20 @@ Respond in JSON format:
                     messages=[{"role": "user", "content": prompt}]
                 )
                 content = response.content[0].text
-            
+
             if not content:
                 return {"verdict": "On Track", "message": "Empty response from API", "reasoning": "No content"}
-            
+
             # Try to parse JSON from the response
             content = content.strip()
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0].strip()
             elif "```" in content:
                 content = content.split("```")[1].split("```")[0].strip()
-            
+
             result = json.loads(content)
             return result
-            
+
         except json.JSONDecodeError:
             # Fallback if JSON parsing fails
             return {
@@ -177,7 +177,7 @@ Respond in JSON format:
                 "message": f"Error analyzing activity: {str(e)}",
                 "reasoning": "Error occurred"
             }
-    
+
     def analyze(self, active_task: Optional[Dict], recent_activity: List[Dict]) -> Dict:
         """Analyze current activity and return verdict."""
         if not active_task:
@@ -187,7 +187,7 @@ Respond in JSON format:
                 "reasoning": "No active task",
                 "timestamp": datetime.now().isoformat()
             }
-        
+
         if not self.connection_healthy or not self.client:
             provider_name = self.provider.upper()
             if self.provider == "vllm":
@@ -200,11 +200,11 @@ Respond in JSON format:
                 "reasoning": "No connection",
                 "timestamp": datetime.now().isoformat()
             }
-        
+
         prompt = self._create_analysis_prompt(active_task, recent_activity)
         result = self._call_llm(prompt)
         result["timestamp"] = datetime.now().isoformat()
-        
+
         # Track consecutive idle/distracted states
         verdict = result.get("verdict", "On Track")
         if verdict == "Idle":
@@ -216,17 +216,17 @@ Respond in JSON format:
         else:
             self.idle_count = 0
             self.distracted_count = 0
-        
+
         result["should_alert"] = (self.idle_count >= 2 or self.distracted_count >= 2)
         self.last_verdict = verdict
-        
+
         return result
-    
+
     def get_onboarding_tasks(self, project_description: str) -> List[Dict]:
         """Generate micro-tasks from project description."""
         if not self.connection_healthy or not self.client:
             return []
-        
+
         prompt = f"""You are FocusFlow, an AI project planner.
 
 The user wants to build: "{project_description}"
@@ -243,7 +243,7 @@ Respond in JSON format:
     {{"title": "Task 2 title", "description": "Detailed description", "estimated_duration": "20 min"}}
   ]
 }}"""
-        
+
         try:
             if self.provider in ["openai", "vllm"]:
                 if not self.client:
@@ -276,20 +276,20 @@ Respond in JSON format:
                     messages=[{"role": "user", "content": prompt}]
                 )
                 content = response.content[0].text
-            
+
             if not content:
                 return []
-            
+
             # Parse JSON
             content = content.strip()
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0].strip()
             elif "```" in content:
                 content = content.split("```")[1].split("```")[0].strip()
-            
+
             result = json.loads(content)
             return result.get("tasks", [])
-            
+
         except Exception as e:
             print(f"Error generating tasks: {e}")
             return []
@@ -297,7 +297,7 @@ Respond in JSON format:
 
 class MockFocusAgent(FocusAgent):
     """Mock agent for demo mode without API keys. Returns predefined responses."""
-    
+
     def __init__(self):
         """Initialize mock agent without any API dependencies."""
         self.provider = "mock"
@@ -308,7 +308,7 @@ class MockFocusAgent(FocusAgent):
         self.client = None
         self.api_key = None
         self.check_counter = 0
-        
+
         self.verdicts_cycle = ["On Track", "On Track", "Distracted", "On Track", "Idle"]
         self.messages = {
             "On Track": [
@@ -330,7 +330,7 @@ class MockFocusAgent(FocusAgent):
                 "Your task is waiting! Let's code! 🔥"
             ]
         }
-    
+
     def analyze(self, active_task: Optional[Dict], recent_activity: List[Dict]) -> Dict:
         """Return mock analysis results."""
         if not active_task:
@@ -340,15 +340,15 @@ class MockFocusAgent(FocusAgent):
                 "reasoning": "No active task (mock mode)",
                 "timestamp": datetime.now().isoformat()
             }
-        
+
         # Cycle through verdicts
         verdict = self.verdicts_cycle[self.check_counter % len(self.verdicts_cycle)]
         self.check_counter += 1
-        
+
         # Get message for this verdict
         import random
         message = random.choice(self.messages[verdict])
-        
+
         # Track consecutive states
         if verdict == "Idle":
             self.idle_count += 1
@@ -359,9 +359,9 @@ class MockFocusAgent(FocusAgent):
         else:
             self.idle_count = 0
             self.distracted_count = 0
-        
+
         self.last_verdict = verdict
-        
+
         return {
             "verdict": verdict,
             "message": message,
@@ -369,12 +369,12 @@ class MockFocusAgent(FocusAgent):
             "timestamp": datetime.now().isoformat(),
             "should_alert": (self.idle_count >= 2 or self.distracted_count >= 2)
         }
-    
+
     def get_onboarding_tasks(self, project_description: str) -> List[Dict]:
         """Generate mock tasks based on project description."""
         # Simple keyword-based task generation
         description_lower = project_description.lower()
-        
+
         if any(word in description_lower for word in ["web", "website", "app", "frontend"]):
             return [
                 {"title": "Set up project structure", "description": "Create folders and initial files", "estimated_duration": "15 min"},

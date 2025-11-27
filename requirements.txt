@@ -1,9 +1,11 @@
 gradio>=5.0.0
+gradio[mcp]
 openai>=1.0.0
 anthropic>=0.34.0
 google-generativeai>=0.8.0
 watchdog>=3.0.0
 python-dotenv>=1.0.0
-vllm>=0.6.0
-mcp
+# vllm>=0.6.0
 elevenlabs>=1.0.0
+linear>=0.1.0
+requests>=2.31.0

@@ -17,12 +17,12 @@ metrics_tracker = MetricsTracker()
 def add_task(title: str, description: str = "", duration: int = 30) -> str:
     """
     Create a new task in FocusFlow.
-    
+
     Args:
         title: Task title (required)
         description: Detailed task description (optional)
         duration: Estimated duration in minutes (default: 30)
-    
+
     Returns:
         Success message with task ID
     """
@@ -38,7 +38,7 @@ def add_task(title: str, description: str = "", duration: int = 30) -> str:
 def get_current_task() -> str:
     """
     Get the currently active task (marked as 'In Progress').
-    
+
     Returns:
         Details of the active task or message if no active task
     """
@@ -46,7 +46,7 @@ def get_current_task() -> str:
         active_task = task_manager.get_active_task()
         if not active_task:
             return "ℹ️ No active task. Use start_task(task_id) to begin working on a task."
-        
+
         return f"""📋 Current Active Task:
 - ID: {active_task['id']}
 - Title: {active_task['title']}
@@ -62,10 +62,10 @@ def start_task(task_id: int) -> str:
     """
     Mark a task as 'In Progress' and set it as the active task.
     Only one task can be active at a time.
-    
+
     Args:
         task_id: ID of the task to start
-    
+
     Returns:
         Success or error message
     """
@@ -74,7 +74,7 @@ def start_task(task_id: int) -> str:
         task = task_manager.get_task(task_id)
         if not task:
             return f"❌ Task {task_id} not found. Use get_all_tasks() to see available tasks."
-        
+
         success = task_manager.set_active_task(task_id)
         if success:
             return f"✅ Task {task_id} started: '{task['title']}'. FocusFlow is now monitoring your progress!"
@@ -88,10 +88,10 @@ def start_task(task_id: int) -> str:
 def mark_task_done(task_id: int) -> str:
     """
     Mark a task as completed ('Done').
-    
+
     Args:
         task_id: ID of the task to complete
-    
+
     Returns:
         Success or error message
     """
@@ -100,7 +100,7 @@ def mark_task_done(task_id: int) -> str:
         task = task_manager.get_task(task_id)
         if not task:
             return f"❌ Task {task_id} not found. Use get_all_tasks() to see available tasks."
-        
+
         task_manager.update_task(task_id, status="Done")
         return f"🎉 Task {task_id} completed: '{task['title']}'! Great work!"
     except Exception as e:
@@ -111,7 +111,7 @@ def mark_task_done(task_id: int) -> str:
 def get_all_tasks() -> str:
     """
     Get a list of all tasks with their current status.
-    
+
     Returns:
         Formatted list of all tasks
     """
@@ -119,7 +119,7 @@ def get_all_tasks() -> str:
         tasks = task_manager.get_all_tasks()
         if not tasks:
             return "📝 No tasks yet. Use add_task() to create your first task!"
-        
+
         result = f"📋 All Tasks ({len(tasks)} total):\n\n"
         for task in tasks:
             status_emoji = "✅" if task['status'] == "Done" else "🔄" if task['status'] == "In Progress" else "⏳"
@@ -127,7 +127,7 @@ def get_all_tasks() -> str:
             if task.get('description'):
                 result += f"   Description: {task['description']}\n"
             result += f"   Status: {task['status']} | Duration: {task.get('estimated_duration', 'N/A')}\n\n"
-        
+
         return result.strip()
     except Exception as e:
         return f"❌ Error getting tasks: {str(e)}"
@@ -137,10 +137,10 @@ def get_all_tasks() -> str:
 def delete_task(task_id: int) -> str:
     """
     Delete a task permanently.
-    
+
     Args:
         task_id: ID of the task to delete
-    
+
     Returns:
         Success or error message
     """
@@ -148,7 +148,7 @@ def delete_task(task_id: int) -> str:
         task = task_manager.get_task(task_id)
         if not task:
             return f"❌ Task {task_id} not found."
-        
+
         title = task['title']
         task_manager.delete_task(task_id)
         return f"🗑️ Task {task_id} deleted: '{title}'"
@@ -157,10 +157,50 @@ def delete_task(task_id: int) -> str:
 
 
 @gr.mcp.tool()
+def update_task(task_id: int, title: Optional[str] = None, description: Optional[str] = None,
+                status: Optional[str] = None, duration: Optional[int] = None) -> str:
+    """
+    Update an existing task.
+
+    Args:
+        task_id: ID of the task to update
+        title: New title (optional)
+        description: New description (optional)
+        status: New status (Todo, In Progress, Done) (optional)
+        duration: New estimated duration in minutes (optional)
+
+    Returns:
+        Success or error message
+    """
+    try:
+        task = task_manager.get_task(task_id)
+        if not task:
+            return f"❌ Task {task_id} not found."
+
+        updates = {}
+        if title is not None:
+            updates['title'] = title
+        if description is not None:
+            updates['description'] = description
+        if status is not None:
+            updates['status'] = status
+        if duration is not None:
+            updates['estimated_duration'] = f"{duration} min"
+
+        if not updates:
+            return "ℹ️ No changes provided."
+
+        task_manager.update_task(task_id, **updates)
+        return f"✅ Task {task_id} updated successfully!"
+    except Exception as e:
+        return f"❌ Error updating task: {str(e)}"
+
+
+@gr.mcp.tool()
 def get_productivity_stats() -> str:
     """
     Get productivity statistics and insights including focus metrics.
-    
+
     Returns:
         Summary of task completion, progress, and focus scores
     """
@@ -169,18 +209,18 @@ def get_productivity_stats() -> str:
         tasks = task_manager.get_all_tasks()
         if not tasks:
             return "📊 No tasks to analyze yet. Create some tasks to see your productivity stats!"
-        
+
         total = len(tasks)
         completed = sum(1 for t in tasks if t['status'] == 'Done')
         in_progress = sum(1 for t in tasks if t['status'] == 'In Progress')
         todo = sum(1 for t in tasks if t['status'] == 'Todo')
-        
+
         completion_rate = (completed / total * 100) if total > 0 else 0
-        
+
         # Focus metrics
         today_stats = metrics_tracker.get_today_stats()
         current_streak = metrics_tracker.get_current_streak()
-        
+
         result = f"""📊 Productivity Statistics:
 
 📋 Task Progress:
