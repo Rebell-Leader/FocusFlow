@@ -5,9 +5,8 @@ Configurable via environment variables for HuggingFace Spaces or local use.
 import gradio as gr
 import os
 from dotenv import load_dotenv
-from storage import TaskManager
+from shared import task_manager, metrics_tracker
 from monitor import FileMonitor
-from metrics import MetricsTracker
 from voice import voice_generator
 from linear_client import LinearClient
 from core.pomodoro import PomodoroTimer
@@ -32,9 +31,8 @@ AI_PROVIDER = os.getenv("AI_PROVIDER", "openai").lower()  # 'openai', 'anthropic
 MONITOR_INTERVAL = int(os.getenv("MONITOR_INTERVAL", "30"))  # seconds
 
 # Initialize Core Components
-task_manager = TaskManager()
+# task_manager and metrics_tracker are imported from shared.py
 file_monitor = FileMonitor()
-metrics_tracker = MetricsTracker()
 linear_client = LinearClient()
 
 # Initialize Logic Modules

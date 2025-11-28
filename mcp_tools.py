@@ -4,13 +4,10 @@ Enables LLM assistants like Claude Desktop to interact with FocusFlow.
 """
 import gradio as gr
 from typing import Dict, List, Optional
-from storage import TaskManager
-from metrics import MetricsTracker
+from shared import task_manager, metrics_tracker
 
-# Initialize shared instances for MCP tools
-# Note: These are separate from app.py's instances but use the same database
-task_manager = TaskManager()
-metrics_tracker = MetricsTracker()
+# Shared instances are imported from shared.py
+# This ensures MCP tools interact with the same data as the main app
 
 
 @gr.mcp.tool()
