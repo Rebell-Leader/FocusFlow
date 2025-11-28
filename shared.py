@@ -14,4 +14,4 @@ LAUNCH_MODE = os.getenv("LAUNCH_MODE", "demo").lower()
 use_memory = (LAUNCH_MODE == "demo")
 
 task_manager = TaskManager(use_memory=use_memory)
-metrics_tracker = MetricsTracker()
+metrics_tracker = MetricsTracker(use_memory=use_memory)
