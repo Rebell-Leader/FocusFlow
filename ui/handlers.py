@@ -117,20 +117,28 @@ class UIHandlers:
 
     def process_onboarding(self, project_description: str) -> tuple:
         """Process onboarding and generate tasks."""
+        # Default UI updates for failure cases (no change to timer/monitoring)
+        no_update = gr.update()
+
         if not self.focus_monitor.focus_agent:
-            return "❌ Please initialize agent first", self.get_task_dataframe(), 0
+            return "❌ Please initialize agent first", self.get_task_dataframe(), 0, no_update, no_update, no_update, no_update
 
         if not project_description.strip():
-            return "❌ Please describe your project", self.get_task_dataframe(), 0
+            return "❌ Please describe your project", self.get_task_dataframe(), 0, no_update, no_update, no_update, no_update
 
         # Generate tasks
         tasks = self.focus_monitor.focus_agent.get_onboarding_tasks(project_description)
 
         if not tasks:
-            return "❌ Failed to generate tasks. Check your AI provider configuration.", self.get_task_dataframe(), 0
+            return "❌ Failed to generate tasks. Check your AI provider configuration.", self.get_task_dataframe(), 0, no_update, no_update, no_update, no_update
+
+        # Reset State (Demo Mode Reset)
+        # We clear everything to give the user a fresh start
+        self.task_manager.clear_all_tasks()
+        self.metrics_tracker.clear_all_data()
+        self.stop_monitoring() # Stop backend monitoring
 
         # Add tasks to database
-        self.task_manager.clear_all_tasks()
         for task in tasks:
             self.task_manager.add_task(
                 title=task.get("title", "Untitled"),
@@ -138,7 +146,17 @@ class UIHandlers:
                 estimated_duration=task.get("estimated_duration", "30 min")
             )
 
-        return f"✅ Generated {len(tasks)} tasks! Go to Task Manager to start.", self.get_task_dataframe(), self.calculate_progress()
+        # Return success with UI resets
+        # Outputs: [onboard_status, task_table, progress_bar, monitor_timer, timer_toggle_btn, timer_active_state, demo_status]
+        return (
+            f"✅ Generated {len(tasks)} tasks! Go to Task Manager to start.",
+            self.get_task_dataframe(),
+            self.calculate_progress(),
+            gr.update(active=False), # Stop timer
+            gr.update(value="▶️ Start Auto-Check"), # Reset button label
+            False, # Reset timer state
+            "⏹️ Monitoring reset (New Project)" # Update status
+        )
 
     def get_task_dataframe(self):
         """Get tasks as a list for display."""

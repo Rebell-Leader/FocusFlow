@@ -50,6 +50,9 @@ def create_app(ui_handlers, pomodoro_timer: PomodoroTimer, launch_mode: str, ai_
         # Auto-refresh timer for monitoring (default 30s)
         monitor_timer = gr.Timer(value=monitor_interval, active=False)
 
+        # State to track timer status (Active by default in Demo, Inactive in Local)
+        timer_active_state = gr.State(value=(launch_mode == "demo"))
+
         # Dedicated 1-second timer for Pomodoro
         pomodoro_ticker = gr.Timer(value=1, active=True)
 
@@ -323,10 +326,11 @@ def create_app(ui_handlers, pomodoro_timer: PomodoroTimer, launch_mode: str, ai_
         app.load(fn=ui_handlers.get_voice_status_ui, outputs=voice_status_display, api_name=False)
 
         # Onboarding
+        # Onboarding
         generate_btn.click(
             fn=ui_handlers.process_onboarding,
             inputs=[project_input],
-            outputs=[onboard_status, task_table, progress_bar],
+            outputs=[onboard_status, task_table, progress_bar, monitor_timer, timer_toggle_btn, timer_active_state, demo_status],
             api_name=False
         )
 
@@ -423,7 +427,7 @@ def create_app(ui_handlers, pomodoro_timer: PomodoroTimer, launch_mode: str, ai_
                 return gr.update(active=new_state), gr.update(value=btn_label), new_state
 
             # We need a state to track timer status for the button label
-            timer_active_state = gr.State(value=True)
+            # timer_active_state is defined at top of function
 
             timer_toggle_btn.click(
                 fn=toggle_demo_timer,
@@ -458,7 +462,7 @@ def create_app(ui_handlers, pomodoro_timer: PomodoroTimer, launch_mode: str, ai_
                 btn_label = "▶️ Start Auto-Check" if active else "⏸️ Pause Auto-Check"
                 return gr.update(active=new_state), gr.update(value=btn_label), new_state
 
-            timer_active_state = gr.State(value=False)
+            # timer_active_state is defined at top of function
 
             timer_toggle_btn.click(
                 fn=toggle_local_timer,

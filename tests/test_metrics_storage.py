@@ -31,6 +31,18 @@ class TestMetricsTrackerStorage:
         mt2 = MetricsTracker(use_memory=True)
         assert len(mt2.get_focus_history()) == 0
 
+    def test_clear_all_data(self):
+        """Test clearing in-memory data."""
+        mt = MetricsTracker(use_memory=True)
+        mt.log_focus_check(1, "Task 1", "On Track", "Good job")
+
+        assert len(mt.get_focus_history()) == 1
+
+        mt.clear_all_data()
+
+        assert len(mt.get_focus_history()) == 0
+        assert mt.get_today_stats()['on_track'] == 0
+
     def test_sqlite_metrics(self):
         """Test that SQLite metrics work and IS persistent."""
         db_path = "test_metrics.db"

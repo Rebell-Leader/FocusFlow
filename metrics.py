@@ -373,3 +373,13 @@ class MetricsTracker:
             "distracted": distracted_counts,
             "idle": idle_counts
         }
+
+    def clear_all_data(self):
+        """Clear all metrics data (for demo reset)."""
+        if self.use_memory:
+            self.memory_history = []
+            self.memory_streaks = {}
+            print("ℹ️ MetricsTracker: In-memory data cleared.")
+        else:
+            # Optional: Implement for SQLite if needed, but primarily for demo
+            pass
