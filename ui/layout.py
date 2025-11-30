@@ -95,6 +95,33 @@ def create_app(ui_handlers, pomodoro_timer: PomodoroTimer, launch_mode: str, ai_
                     gr.Markdown("""
                     > ℹ️ **Demo Mode**: Use the text area in Monitor tab to simulate your workspace.
                     """)
+
+                    with gr.Accordion("⚙️ Configure Demo (Add your keys)", open=False):
+                        gr.Markdown("If the default demo keys are expired, enter your own here to enable AI features.")
+                        with gr.Row():
+                            config_provider = gr.Dropdown(
+                                label="LLM Provider",
+                                choices=["openai", "anthropic", "gemini"],
+                                value=ai_provider
+                            )
+                            config_api_key = gr.Textbox(
+                                label="LLM API Key",
+                                placeholder="sk-...",
+                                type="password"
+                            )
+                            config_eleven_key = gr.Textbox(
+                                label="ElevenLabs Key (Optional)",
+                                placeholder="sk-...",
+                                type="password"
+                            )
+                        config_save_btn = gr.Button("💾 Save & Re-Initialize", variant="primary")
+
+                        config_save_btn.click(
+                            fn=ui_handlers.reconfigure_agent,
+                            inputs=[config_provider, config_api_key, config_eleven_key],
+                            outputs=[init_status, ai_provider_display],
+                            api_name=False
+                        )
                 else:
                     gr.Markdown("""
                     > ℹ️ **Local Mode**: Monitor your actual project directory.

@@ -115,6 +115,28 @@ class UIHandlers:
             return (f"ℹ️ Using Mock AI for demo (Error: {str(e)}) 🎭",
                    f"**AI Provider:** `MOCK AI (Error Fallback)`")
 
+    def reconfigure_agent(self, provider: str, api_key: str, eleven_key: str) -> tuple:
+        """
+        Re-configure the agent with user-provided keys (Demo Mode).
+        """
+        # Update Environment Variables
+        if api_key.strip():
+            if provider == "openai":
+                os.environ["OPENAI_API_KEY"] = api_key
+            elif provider == "anthropic":
+                os.environ["ANTHROPIC_API_KEY"] = api_key
+            elif provider == "gemini":
+                os.environ["GEMINI_API_KEY"] = api_key
+
+        if eleven_key.strip():
+            os.environ["ELEVEN_API_KEY"] = eleven_key
+            # Re-init voice
+            from voice import voice_generator
+            voice_generator.initialize()
+
+        # Re-initialize Agent
+        return self.initialize_agent(provider)
+
     def process_onboarding(self, project_description: str) -> tuple:
         """Process onboarding and generate tasks."""
         # Default UI updates for failure cases (no change to timer/monitoring)
